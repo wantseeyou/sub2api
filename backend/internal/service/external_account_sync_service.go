@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -51,8 +52,10 @@ type ExternalAccountSyncService struct {
 	requestTimeout     time.Duration                        // 单次同步超时时间。
 	defaultConcurrency int                                  // 新建账号默认并发数。
 	triggerCh          chan string                          // 立即同步触发队列。
-	stopCh             chan struct{}                        // 停止信号。
-	stopOnce           sync.Once                            // 停止流程幂等控制。
+	lifecycleMu        sync.Mutex                           // 生命周期状态锁。
+	stopCancel         context.CancelFunc                   // 后台同步停止函数。
+	started            bool                                 // 后台服务是否已启动。
+	stopped            bool                                 // 后台服务是否已停止。
 	wg                 sync.WaitGroup                       // 后台协程等待组。
 	running            int32                                // 当前是否已有同步运行。
 }
@@ -100,7 +103,6 @@ func NewExternalAccountSyncService(settings ExternalAccountSyncSettingReader, ac
 		requestTimeout:     requestTimeout,
 		defaultConcurrency: opts.DefaultConcurrency,
 		triggerCh:          make(chan string, 1),
-		stopCh:             make(chan struct{}),
 	}
 }
 
@@ -109,8 +111,17 @@ func (s *ExternalAccountSyncService) Start() {
 	if s == nil {
 		return
 	}
+	s.lifecycleMu.Lock()
+	if s.started || s.stopped {
+		s.lifecycleMu.Unlock()
+		return
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	s.stopCancel = cancel
+	s.started = true
 	s.wg.Add(1)
-	go s.run()
+	s.lifecycleMu.Unlock()
+	go s.run(ctx)
 }
 
 // Stop 停止外部账号同步服务。
@@ -118,10 +129,17 @@ func (s *ExternalAccountSyncService) Stop() {
 	if s == nil {
 		return
 	}
-	s.stopOnce.Do(func() {
-		close(s.stopCh)
-		s.wg.Wait()
-	})
+	s.lifecycleMu.Lock()
+	if s.stopped {
+		s.lifecycleMu.Unlock()
+		return
+	}
+	s.stopped = true
+	if s.stopCancel != nil {
+		s.stopCancel()
+	}
+	s.lifecycleMu.Unlock()
+	s.wg.Wait()
 }
 
 // TriggerNow 触发一次立即同步。
@@ -139,27 +157,27 @@ func (s *ExternalAccountSyncService) TriggerNow(reason string) {
 	}
 }
 
-func (s *ExternalAccountSyncService) run() {
+func (s *ExternalAccountSyncService) run(ctx context.Context) {
 	defer s.wg.Done()
 
-	s.syncWithBackgroundTimeout("startup")
+	s.syncWithBackgroundTimeout(ctx, "startup")
 	ticker := time.NewTicker(s.interval)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			s.syncWithBackgroundTimeout("scheduled")
+			s.syncWithBackgroundTimeout(ctx, "scheduled")
 		case reason := <-s.triggerCh:
-			s.syncWithBackgroundTimeout(reason)
-		case <-s.stopCh:
+			s.syncWithBackgroundTimeout(ctx, reason)
+		case <-ctx.Done():
 			return
 		}
 	}
 }
 
-func (s *ExternalAccountSyncService) syncWithBackgroundTimeout(reason string) {
-	ctx, cancel := context.WithTimeout(context.Background(), s.requestTimeout)
+func (s *ExternalAccountSyncService) syncWithBackgroundTimeout(parent context.Context, reason string) {
+	ctx, cancel := context.WithTimeout(parent, s.requestTimeout)
 	defer cancel()
 	if err := s.SyncOnce(ctx, reason); err != nil {
 		log.Printf("[ExternalAccountSync] sync failed: reason=%s err=%v", reason, err)
@@ -204,11 +222,11 @@ func (s *ExternalAccountSyncService) SyncOnce(ctx context.Context, reason string
 func (s *ExternalAccountSyncService) fetch(ctx context.Context, rawURL string) (*externalAccountSyncResponse, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("build token-export request for %s: %w", redactExternalAccountSyncURL(rawURL), err)
 	}
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("fetch token-export from %s: %w", redactExternalAccountSyncURL(rawURL), sanitizeExternalAccountSyncHTTPError(err, rawURL))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
@@ -272,7 +290,9 @@ func (s *ExternalAccountSyncService) mergeItemIntoAccount(account *Account, item
 	account.Name = item.Name
 	account.Platform = item.Platform
 	account.Type = item.Type
-	account.Status = externalAccountSyncStatus(item.Status)
+	status := externalAccountSyncStatus(item.Status)
+	account.Status = status
+	account.Schedulable = status == StatusActive
 	account.Credentials = externalAccountSyncCredentials(item, email)
 	account.Extra = externalAccountSyncExtra(account.Extra, item, email)
 }
@@ -312,7 +332,7 @@ func externalAccountSyncExtra(existing map[string]any, item externalAccountSyncI
 	}
 	out[externalTokenExportManagedKey] = true
 	out[externalTokenExportEmailKey] = email
-	out[externalTokenExportSourceIDKey] = float64(item.ID)
+	out[externalTokenExportSourceIDKey] = strconv.FormatInt(item.ID, 10)
 	if !item.UpdatedAt.IsZero() {
 		out[externalTokenExportUpdatedAtKey] = item.UpdatedAt.Format(time.RFC3339)
 	}
@@ -343,12 +363,46 @@ func redactExternalAccountSyncURL(rawURL string) string {
 	if err != nil {
 		return "<invalid>"
 	}
+	if parsed.User != nil {
+		username := parsed.User.Username()
+		if _, hasPassword := parsed.User.Password(); hasPassword {
+			parsed.User = url.UserPassword(username, "redacted")
+		} else {
+			parsed.User = url.User(username)
+		}
+	}
 	query := parsed.Query()
-	for _, key := range []string{"password", "token", "secret", "api_key"} {
-		if query.Has(key) {
+	for key := range query {
+		if isExternalAccountSyncSensitiveQueryKey(key) {
 			query.Set(key, "redacted")
 		}
 	}
 	parsed.RawQuery = query.Encode()
 	return parsed.String()
+}
+
+func isExternalAccountSyncSensitiveQueryKey(key string) bool {
+	key = strings.ToLower(strings.ReplaceAll(strings.TrimSpace(key), "-", "_"))
+	if key == "" {
+		return false
+	}
+	if strings.Contains(key, "password") ||
+		strings.Contains(key, "secret") ||
+		strings.Contains(key, "token") ||
+		strings.Contains(key, "authorization") {
+		return true
+	}
+	switch key {
+	case "api_key", "apikey", "key":
+		return true
+	default:
+		return false
+	}
+}
+
+func sanitizeExternalAccountSyncHTTPError(err error, rawURL string) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s", strings.ReplaceAll(err.Error(), rawURL, redactExternalAccountSyncURL(rawURL)))
 }
