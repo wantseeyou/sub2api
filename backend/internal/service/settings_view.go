@@ -18,6 +18,7 @@ type SystemSettings struct {
 	PromoCodeEnabled                 bool
 	PasswordResetEnabled             bool
 	FrontendURL                      string
+	ExternalAccountSyncURL           string `json:"external_account_sync_url"`
 	InvitationCodeEnabled            bool
 	TotpEnabled                      bool // TOTP 双因素认证
 	LoginAgreementEnabled            bool

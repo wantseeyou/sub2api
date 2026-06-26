@@ -322,24 +322,25 @@ var (
 )
 
 const (
-	defaultAuthSourceBalance     = 0
-	defaultAuthSourceConcurrency = 5
-	defaultWeChatConnectMode     = "open"
-	defaultWeChatConnectScopes   = "snsapi_login"
-	defaultWeChatConnectFrontend = "/auth/wechat/callback"
-	defaultGitHubOAuthAuthorize  = "https://github.com/login/oauth/authorize"
-	defaultGitHubOAuthToken      = "https://github.com/login/oauth/access_token"
-	defaultGitHubOAuthUserInfo   = "https://api.github.com/user"
-	defaultGitHubOAuthEmails     = "https://api.github.com/user/emails"
-	defaultGitHubOAuthScopes     = "read:user user:email"
-	defaultGitHubOAuthFrontend   = "/auth/oauth/callback"
-	defaultGoogleOAuthAuthorize  = "https://accounts.google.com/o/oauth2/v2/auth"
-	defaultGoogleOAuthToken      = "https://oauth2.googleapis.com/token"
-	defaultGoogleOAuthUserInfo   = "https://openidconnect.googleapis.com/v1/userinfo"
-	defaultGoogleOAuthScopes     = "openid email profile"
-	defaultGoogleOAuthFrontend   = "/auth/oauth/callback"
-	defaultLoginAgreementMode    = "modal"
-	defaultLoginAgreementDate    = "2026-03-31"
+	defaultAuthSourceBalance         = 0
+	defaultAuthSourceConcurrency     = 5
+	defaultWeChatConnectMode         = "open"
+	defaultWeChatConnectScopes       = "snsapi_login"
+	defaultWeChatConnectFrontend     = "/auth/wechat/callback"
+	defaultGitHubOAuthAuthorize      = "https://github.com/login/oauth/authorize"
+	defaultGitHubOAuthToken          = "https://github.com/login/oauth/access_token"
+	defaultGitHubOAuthUserInfo       = "https://api.github.com/user"
+	defaultGitHubOAuthEmails         = "https://api.github.com/user/emails"
+	defaultGitHubOAuthScopes         = "read:user user:email"
+	defaultGitHubOAuthFrontend       = "/auth/oauth/callback"
+	defaultGoogleOAuthAuthorize      = "https://accounts.google.com/o/oauth2/v2/auth"
+	defaultGoogleOAuthToken          = "https://oauth2.googleapis.com/token"
+	defaultGoogleOAuthUserInfo       = "https://openidconnect.googleapis.com/v1/userinfo"
+	defaultGoogleOAuthScopes         = "openid email profile"
+	defaultGoogleOAuthFrontend       = "/auth/oauth/callback"
+	defaultLoginAgreementMode        = "modal"
+	defaultLoginAgreementDate        = "2026-03-31"
+	SettingKeyExternalAccountSyncURL = "external_account_sync_url"
 )
 
 func normalizeLoginAgreementMode(raw string) string {
@@ -708,6 +709,18 @@ func (s *SettingService) GetFrontendURL(ctx context.Context) string {
 		return strings.TrimSpace(val)
 	}
 	return s.cfg.Server.FrontendURL
+}
+
+// GetExternalAccountSyncURL 获取外部账号同步 URL。
+func (s *SettingService) GetExternalAccountSyncURL(ctx context.Context) string {
+	if s == nil || s.settingRepo == nil {
+		return ""
+	}
+	value, err := s.settingRepo.GetValue(ctx, SettingKeyExternalAccountSyncURL)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(value)
 }
 
 // GetCyberSessionBlockRuntime 返回 (开关, TTL)，进程内缓存 ~60s，
@@ -1960,6 +1973,8 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyPromoCodeEnabled] = strconv.FormatBool(settings.PromoCodeEnabled)
 	updates[SettingKeyPasswordResetEnabled] = strconv.FormatBool(settings.PasswordResetEnabled)
 	updates[SettingKeyFrontendURL] = settings.FrontendURL
+	settings.ExternalAccountSyncURL = strings.TrimSpace(settings.ExternalAccountSyncURL)
+	updates[SettingKeyExternalAccountSyncURL] = settings.ExternalAccountSyncURL
 	updates[SettingKeyInvitationCodeEnabled] = strconv.FormatBool(settings.InvitationCodeEnabled)
 	updates[SettingKeyTotpEnabled] = strconv.FormatBool(settings.TotpEnabled)
 	settings.LoginAgreementMode = normalizeLoginAgreementMode(settings.LoginAgreementMode)
@@ -3182,6 +3197,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		openAIAdvancedSchedulerSettingKey:            "false",
 
 		SettingKeyAllowUserViewErrorRequests: "false",
+		SettingKeyExternalAccountSyncURL:     "",
 	}
 
 	return s.settingRepo.SetMultiple(ctx, defaults)
@@ -3208,6 +3224,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		PromoCodeEnabled:                 settings[SettingKeyPromoCodeEnabled] != "false", // 默认启用
 		PasswordResetEnabled:             emailVerifyEnabled && settings[SettingKeyPasswordResetEnabled] == "true",
 		FrontendURL:                      settings[SettingKeyFrontendURL],
+		ExternalAccountSyncURL:           strings.TrimSpace(settings[SettingKeyExternalAccountSyncURL]),
 		InvitationCodeEnabled:            settings[SettingKeyInvitationCodeEnabled] == "true",
 		TotpEnabled:                      settings[SettingKeyTotpEnabled] == "true",
 		LoginAgreementEnabled:            settings[SettingKeyLoginAgreementEnabled] == "true",
