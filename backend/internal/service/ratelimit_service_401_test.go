@@ -46,6 +46,16 @@ type tokenCacheInvalidatorRecorder struct {
 	err      error
 }
 
+type externalAccountSyncTriggerStub struct {
+	calls   int
+	reasons []string
+}
+
+func (s *externalAccountSyncTriggerStub) TriggerNow(reason string) {
+	s.calls++
+	s.reasons = append(s.reasons, reason)
+}
+
 type openAI403CounterCacheStub struct {
 	counts     []int64
 	resetCalls []int64
@@ -126,6 +136,35 @@ func TestRateLimitService_HandleUpstreamError_OAuth401SetsTempUnschedulable(t *t
 		require.Equal(t, 0, repo.tempCalls)
 		require.Empty(t, invalidator.accounts)
 	})
+}
+
+func TestRateLimitService_HandleUpstreamError_ExternalManagedOAuth401TriggersSync(t *testing.T) {
+	repo := &rateLimitAccountRepoStub{}
+	trigger := &externalAccountSyncTriggerStub{}
+	cfg := &config.Config{}
+	cfg.RateLimit.OAuth401CooldownMinutes = 10
+	service := NewRateLimitService(repo, nil, cfg, nil, nil)
+	service.SetExternalAccountSyncTrigger(trigger)
+	account := &Account{
+		ID:       1,
+		Platform: PlatformOpenAI,
+		Type:     AccountTypeOAuth,
+		Status:   StatusActive,
+		Credentials: map[string]any{
+			"refresh_token": "r",
+		},
+		Extra: map[string]any{
+			"external_token_export_managed": true,
+		},
+	}
+
+	shouldDisable := service.HandleUpstreamError(context.Background(), account, 401, http.Header{}, []byte("unauthorized"))
+
+	require.True(t, shouldDisable)
+	require.Equal(t, 1, trigger.calls)
+	require.Equal(t, []string{"token_invalid"}, trigger.reasons)
+	require.Equal(t, 1, repo.tempCalls)
+	require.Equal(t, 0, repo.setErrorCalls)
 }
 
 // TestRateLimitService_HandleUpstreamError_OAuth401InvalidatorError

@@ -30,8 +30,14 @@ type RateLimitService struct {
 	settingService        *SettingService
 	tokenCacheInvalidator TokenCacheInvalidator
 	runtimeBlocker        AccountRuntimeBlocker
+	externalSyncTrigger   ExternalAccountSyncTrigger
 	usageCacheMu          sync.RWMutex
 	usageCache            map[int64]*geminiUsageCacheEntry
+}
+
+// ExternalAccountSyncTrigger 触发外部账号同步。
+type ExternalAccountSyncTrigger interface {
+	TriggerNow(reason string)
 }
 
 type AccountRuntimeBlocker interface {
@@ -110,6 +116,11 @@ func (s *RateLimitService) SetSettingService(settingService *SettingService) {
 // SetTokenCacheInvalidator 设置 token 缓存清理器（可选依赖）
 func (s *RateLimitService) SetTokenCacheInvalidator(invalidator TokenCacheInvalidator) {
 	s.tokenCacheInvalidator = invalidator
+}
+
+// SetExternalAccountSyncTrigger 设置外部账号同步触发器（可选依赖）。
+func (s *RateLimitService) SetExternalAccountSyncTrigger(trigger ExternalAccountSyncTrigger) {
+	s.externalSyncTrigger = trigger
 }
 
 func (s *RateLimitService) SetAccountRuntimeBlocker(blocker AccountRuntimeBlocker) {
@@ -254,6 +265,9 @@ func (s *RateLimitService) HandleUpstreamError(ctx context.Context, account *Acc
 				if err := s.tokenCacheInvalidator.InvalidateToken(ctx, account); err != nil {
 					slog.Warn("oauth_401_invalidate_cache_failed", "account_id", account.ID, "error", err)
 				}
+			}
+			if account.Extra != nil && account.Extra["external_token_export_managed"] == true && s.externalSyncTrigger != nil {
+				s.externalSyncTrigger.TriggerNow("token_invalid")
 			}
 			// 缺少 refresh_token 的 OAuth 账号无法在冷却期内自愈（后台刷新服务也会跳过），
 			// 直接走 SetError 永久禁用，避免冷却结束后再被选中产生一发无意义的 502。
