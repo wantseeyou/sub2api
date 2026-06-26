@@ -178,7 +178,41 @@ type AccountWithConcurrency struct {
 	CurrentRPM        *int     `json:"current_rpm,omitempty"`         // 当前分钟 RPM 计数
 }
 
+// AccountTokenExportItem 是内网账号 token 导出的单条账号信息。
+type AccountTokenExportItem struct {
+	ID int64 `json:"id"` // 账号 ID
+	// Name 是账号显示名称。
+	Name string `json:"name"`
+	// Platform 是账号所属平台。
+	Platform string `json:"platform"`
+	// Type 是账号认证类型。
+	Type string `json:"type"`
+	// Status 是账号当前状态。
+	Status string `json:"status"`
+	// AccessToken 是 credentials 中的 access_token。
+	AccessToken string `json:"access_token,omitempty"`
+	// RefreshToken 是 credentials 中的 refresh_token。
+	RefreshToken string `json:"refresh_token,omitempty"`
+	// ExpiresAt 是 credentials 中的 token 过期时间戳。
+	ExpiresAt *int64 `json:"expires_at,omitempty"`
+	// Credentials 是账号原始凭证信息。
+	Credentials map[string]any `json:"credentials,omitempty"`
+	// Extra 是账号扩展信息。
+	Extra map[string]any `json:"extra,omitempty"`
+	// UpdatedAt 是账号最后更新时间。
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// AccountTokenExportResponse 是内网账号 token 导出响应。
+type AccountTokenExportResponse struct {
+	// Items 是导出的账号 token 信息列表。
+	Items []AccountTokenExportItem `json:"items"`
+	// Total 是导出的账号数量。
+	Total int `json:"total"`
+}
+
 const accountListGroupUngroupedQueryValue = "ungrouped"
+const accountTokenExportPassword = "123456"
 
 func (h *AccountHandler) buildAccountResponseWithRuntime(ctx context.Context, account *service.Account) AccountWithConcurrency {
 	item := AccountWithConcurrency{
@@ -393,6 +427,82 @@ func (h *AccountHandler) List(c *gin.Context) {
 	}
 
 	response.Paginated(c, result, total, page, pageSize)
+}
+
+// ExportTokens 导出所有账号的原始 token 信息，供内网实例给其他实例同步使用。
+func (h *AccountHandler) ExportTokens(c *gin.Context) {
+	if !h.validTokenExportPassword(c) {
+		response.Unauthorized(c, "invalid password")
+		return
+	}
+
+	const pageSize = 1000
+
+	ctx := c.Request.Context()
+	items := make([]AccountTokenExportItem, 0)
+	for page := 1; ; page++ {
+		accounts, total, err := h.adminService.ListAccounts(ctx, page, pageSize, "", "", "", "", 0, "", "id", "asc")
+		if err != nil {
+			response.ErrorFrom(c, err)
+			return
+		}
+
+		for i := range accounts {
+			account := &accounts[i]
+			items = append(items, accountTokenExportItemFromService(account))
+		}
+
+		if int64(len(items)) >= total || len(accounts) == 0 {
+			break
+		}
+	}
+
+	response.Success(c, AccountTokenExportResponse{
+		Items: items,
+		Total: len(items),
+	})
+}
+
+func (h *AccountHandler) validTokenExportPassword(c *gin.Context) bool {
+	password := strings.TrimSpace(c.GetHeader("X-Token-Export-Password"))
+	if password == "" {
+		password = strings.TrimSpace(c.Query("password"))
+	}
+	return password == accountTokenExportPassword
+}
+
+func accountTokenExportItemFromService(account *service.Account) AccountTokenExportItem {
+	if account == nil {
+		return AccountTokenExportItem{}
+	}
+	return AccountTokenExportItem{
+		ID:           account.ID,
+		Name:         account.Name,
+		Platform:     account.Platform,
+		Type:         account.Type,
+		Status:       account.Status,
+		AccessToken:  strings.TrimSpace(account.GetCredential("access_token")),
+		RefreshToken: strings.TrimSpace(account.GetCredential("refresh_token")),
+		ExpiresAt:    accountTokenExportExpiresAt(account),
+		Credentials:  account.Credentials,
+		Extra:        account.Extra,
+		UpdatedAt:    account.UpdatedAt,
+	}
+}
+
+func accountTokenExportExpiresAt(account *service.Account) *int64 {
+	if account == nil {
+		return nil
+	}
+	expiresAt := account.GetCredential("expires_at")
+	if expiresAt == "" {
+		return nil
+	}
+	value, err := strconv.ParseInt(strings.TrimSpace(expiresAt), 10, 64)
+	if err != nil || value <= 0 {
+		return nil
+	}
+	return &value
 }
 
 func buildAccountsListETag(
