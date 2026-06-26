@@ -401,7 +401,7 @@ type UpdateSettingsRequest struct {
 	PromoCodeEnabled                 bool                         `json:"promo_code_enabled"`
 	PasswordResetEnabled             bool                         `json:"password_reset_enabled"`
 	FrontendURL                      string                       `json:"frontend_url"`
-	ExternalAccountSyncURL           string                       `json:"external_account_sync_url"`
+	ExternalAccountSyncURL           *string                      `json:"external_account_sync_url"`
 	InvitationCodeEnabled            bool                         `json:"invitation_code_enabled"`
 	TotpEnabled                      bool                         `json:"totp_enabled"` // TOTP 双因素认证
 	LoginAgreementEnabled            bool                         `json:"login_agreement_enabled"`
@@ -1532,23 +1532,28 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		PromoCodeEnabled:                 req.PromoCodeEnabled,
 		PasswordResetEnabled:             req.PasswordResetEnabled,
 		FrontendURL:                      req.FrontendURL,
-		ExternalAccountSyncURL:           strings.TrimSpace(req.ExternalAccountSyncURL),
-		InvitationCodeEnabled:            req.InvitationCodeEnabled,
-		TotpEnabled:                      req.TotpEnabled,
-		LoginAgreementEnabled:            req.LoginAgreementEnabled,
-		LoginAgreementMode:               loginAgreementMode,
-		LoginAgreementUpdatedAt:          loginAgreementUpdatedAt,
-		LoginAgreementDocuments:          loginAgreementDocuments,
-		SMTPHost:                         req.SMTPHost,
-		SMTPPort:                         req.SMTPPort,
-		SMTPUsername:                     req.SMTPUsername,
-		SMTPPassword:                     req.SMTPPassword,
-		SMTPFrom:                         req.SMTPFrom,
-		SMTPFromName:                     req.SMTPFromName,
-		SMTPUseTLS:                       req.SMTPUseTLS,
-		TurnstileEnabled:                 req.TurnstileEnabled,
-		TurnstileSiteKey:                 req.TurnstileSiteKey,
-		TurnstileSecretKey:               req.TurnstileSecretKey,
+		ExternalAccountSyncURL: func() string {
+			if req.ExternalAccountSyncURL != nil {
+				return strings.TrimSpace(*req.ExternalAccountSyncURL)
+			}
+			return previousSettings.ExternalAccountSyncURL
+		}(),
+		InvitationCodeEnabled:   req.InvitationCodeEnabled,
+		TotpEnabled:             req.TotpEnabled,
+		LoginAgreementEnabled:   req.LoginAgreementEnabled,
+		LoginAgreementMode:      loginAgreementMode,
+		LoginAgreementUpdatedAt: loginAgreementUpdatedAt,
+		LoginAgreementDocuments: loginAgreementDocuments,
+		SMTPHost:                req.SMTPHost,
+		SMTPPort:                req.SMTPPort,
+		SMTPUsername:            req.SMTPUsername,
+		SMTPPassword:            req.SMTPPassword,
+		SMTPFrom:                req.SMTPFrom,
+		SMTPFromName:            req.SMTPFromName,
+		SMTPUseTLS:              req.SMTPUseTLS,
+		TurnstileEnabled:        req.TurnstileEnabled,
+		TurnstileSiteKey:        req.TurnstileSiteKey,
+		TurnstileSecretKey:      req.TurnstileSecretKey,
 		APIKeyACLTrustForwardedIP: func() bool {
 			if req.APIKeyACLTrustForwardedIP != nil {
 				return *req.APIKeyACLTrustForwardedIP

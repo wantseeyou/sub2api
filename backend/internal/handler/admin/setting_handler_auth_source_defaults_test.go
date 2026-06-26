@@ -284,6 +284,54 @@ func TestSettingHandler_UpdateSettings_PreservesLegacyBlankPaymentVisibleMethodS
 	require.Equal(t, "true", repo.values[service.SettingPaymentVisibleMethodAlipayEnabled])
 }
 
+func TestSettingHandler_UpdateSettings_PreservesOmittedExternalAccountSyncURL(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	repo := &settingHandlerRepoStub{
+		values: map[string]string{
+			service.SettingKeyPromoCodeEnabled:                 "true",
+			service.SettingKeyExternalAccountSyncURL:           "https://sync.example.com/token-export",
+			service.SettingKeyRegistrationEmailSuffixWhitelist: "[]",
+		},
+	}
+	svc := service.NewSettingService(repo, &config.Config{Default: config.DefaultConfig{UserConcurrency: 5}})
+	handler := NewSettingHandler(svc, nil, nil, nil, nil, nil, nil)
+
+	body := map[string]any{
+		"promo_code_enabled": true,
+	}
+	rawBody, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	putRec := httptest.NewRecorder()
+	putCtx, _ := gin.CreateTestContext(putRec)
+	putCtx.Request = httptest.NewRequest(http.MethodPut, "/api/v1/admin/settings", bytes.NewReader(rawBody))
+	putCtx.Request.Header.Set("Content-Type", "application/json")
+
+	handler.UpdateSettings(putCtx)
+
+	require.Equal(t, http.StatusOK, putRec.Code)
+	require.Equal(t, "https://sync.example.com/token-export", repo.values[service.SettingKeyExternalAccountSyncURL])
+
+	var putResp response.Response
+	require.NoError(t, json.Unmarshal(putRec.Body.Bytes(), &putResp))
+	putData, ok := putResp.Data.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "https://sync.example.com/token-export", putData["external_account_sync_url"])
+
+	getRec := httptest.NewRecorder()
+	getCtx, _ := gin.CreateTestContext(getRec)
+	getCtx.Request = httptest.NewRequest(http.MethodGet, "/api/v1/admin/settings", nil)
+
+	handler.GetSettings(getCtx)
+
+	require.Equal(t, http.StatusOK, getRec.Code)
+	var getResp response.Response
+	require.NoError(t, json.Unmarshal(getRec.Body.Bytes(), &getResp))
+	getData, ok := getResp.Data.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, putData["external_account_sync_url"], getData["external_account_sync_url"])
+}
+
 func TestSettingHandler_UpdateSettings_PersistsExplicitFalseOIDCCompatibilityFlags(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	repo := &settingHandlerRepoStub{
