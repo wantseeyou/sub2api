@@ -59,6 +59,22 @@ https://source.example.com/api/v1/accounts/token-export?password=123456
 
 导出的 `id` 只作为来源元数据保存，不作为本地账号主键或匹配键。
 
+## 账号筛选实现
+
+账号筛选建议封装在 repository 层，新增类似下面的方法：
+
+```go
+ListByPlatformTypeCredentialEmail(ctx context.Context, platform, accountType, email string) ([]Account, error)
+```
+
+实现要点：
+
+- service 层只传入 trim 后的 `email`。
+- repository 层同时过滤 `platform`、`type` 和 `credentials.email`。
+- JSON 条件优先使用项目已有的 `sqljson.ValueEQ` 写法，例如按 `sqljson.Path("email")` 匹配 `credentials` 字段，避免手写 SQL 导致数据库方言差异。
+- 该方法允许返回 0、1 或多条结果；多条结果由同步服务记录 warning 并跳过。
+- 本次不新增唯一索引，因为历史数据中可能已经存在重复账号，直接加唯一约束会带来 migration 风险。
+
 ## 托管账号标记
 
 通过该同步创建或更新的账号，在 `extra` 中写入标记：
