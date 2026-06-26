@@ -43,6 +43,8 @@ type AccountRepository interface {
 	ListActive(ctx context.Context) ([]Account, error)
 	ListOAuthRefreshCandidates(ctx context.Context) ([]Account, error)
 	ListByPlatform(ctx context.Context, platform string) ([]Account, error)
+	// ListByPlatformTypeCredentialEmail 按 platform、type 和 credentials.email 查找账号。
+	ListByPlatformTypeCredentialEmail(ctx context.Context, platform, accountType, email string) ([]Account, error)
 
 	UpdateLastUsed(ctx context.Context, id int64) error
 	BatchUpdateLastUsed(ctx context.Context, updates map[int64]time.Time) error

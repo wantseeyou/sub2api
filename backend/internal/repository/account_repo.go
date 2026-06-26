@@ -719,6 +719,29 @@ func (r *accountRepository) ListByPlatform(ctx context.Context, platform string)
 	return r.accountsToService(ctx, accounts)
 }
 
+// ListByPlatformTypeCredentialEmail 按 platform、type 和 credentials.email 查找账号。
+func (r *accountRepository) ListByPlatformTypeCredentialEmail(ctx context.Context, platform, accountType, email string) ([]service.Account, error) {
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return []service.Account{}, nil
+	}
+
+	accounts, err := r.client.Account.Query().
+		Where(
+			dbaccount.PlatformEQ(platform),
+			dbaccount.TypeEQ(accountType),
+			dbpredicate.Account(func(s *entsql.Selector) {
+				s.Where(sqljson.ValueEQ(dbaccount.FieldCredentials, email, sqljson.Path("email")))
+			}),
+		).
+		Order(dbent.Asc(dbaccount.FieldID)).
+		All(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return r.accountsToService(ctx, accounts)
+}
+
 func (r *accountRepository) UpdateLastUsed(ctx context.Context, id int64) error {
 	now := time.Now()
 	_, err := r.client.Account.Update().
