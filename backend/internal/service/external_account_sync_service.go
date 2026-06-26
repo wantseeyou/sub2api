@@ -326,9 +326,6 @@ func (s *ExternalAccountSyncService) mergeItemIntoAccount(account *Account, item
 	account.Name = item.Name
 	account.Platform = item.Platform
 	account.Type = item.Type
-	status := externalAccountSyncStatus(item.Status)
-	account.Status = status
-	account.Schedulable = status == StatusActive
 	account.Credentials = externalAccountSyncCredentials(item, email)
 	account.Extra = externalAccountSyncExtra(account.Extra, item, email)
 }

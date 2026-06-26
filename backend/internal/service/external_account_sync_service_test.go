@@ -131,7 +131,7 @@ func TestExternalAccountSyncService_SyncOnce_UpdatesSingleMatch(t *testing.T) {
 	require.True(t, repo.updated[0].Schedulable)
 }
 
-func TestExternalAccountSyncService_SyncOnce_UpdatesInactiveToUnschedulable(t *testing.T) {
+func TestExternalAccountSyncService_SyncOnce_PreservesLocalStatusAndSchedulable(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"items":[{"id":8,"name":"inactive","platform":"openai","type":"oauth","status":"inactive","credentials":{"email":"u@example.com","access_token":"new"},"extra":{}}],"total":1}`))
 	}))
@@ -144,8 +144,8 @@ func TestExternalAccountSyncService_SyncOnce_UpdatesInactiveToUnschedulable(t *t
 	svc := NewExternalAccountSyncService(settings, repo, ExternalAccountSyncOptions{Interval: time.Hour, RequestTimeout: time.Second})
 
 	require.NoError(t, svc.SyncOnce(context.Background(), "test"))
-	require.Equal(t, "inactive", repo.updated[0].Status)
-	require.False(t, repo.updated[0].Schedulable)
+	require.Equal(t, StatusActive, repo.updated[0].Status)
+	require.True(t, repo.updated[0].Schedulable)
 }
 
 func TestExternalAccountSyncService_SyncOnce_SkipsDuplicateMatches(t *testing.T) {

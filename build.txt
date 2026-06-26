@@ -1,0 +1,11 @@
+cd /Users/duanguobin/go/src/sub2api/frontend
+pnpm install
+pnpm run build
+
+cd /Users/duanguobin/go/src/sub2api/backend
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+  -tags embed \
+  -ldflags "-s -w -X main.Version=$(tr -d '\r\n' < ./cmd/server/VERSION) -X main.BuildType=release" \
+  -trimpath \
+  -o bin/sub2api \
+  ./cmd/server
