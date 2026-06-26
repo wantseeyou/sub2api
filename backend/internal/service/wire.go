@@ -271,6 +271,21 @@ func ProvideSchedulerSnapshotService(
 	return svc
 }
 
+// ProvideExternalAccountSyncService 创建并启动外部账号同步服务。
+func ProvideExternalAccountSyncService(settingService *SettingService, accountRepo AccountRepository, cfg *config.Config) *ExternalAccountSyncService {
+	defaultConcurrency := 1
+	if cfg != nil && cfg.Default.UserConcurrency > 0 {
+		defaultConcurrency = cfg.Default.UserConcurrency
+	}
+	svc := NewExternalAccountSyncService(settingService, accountRepo, ExternalAccountSyncOptions{
+		Interval:           10 * time.Second,
+		RequestTimeout:     10 * time.Second,
+		DefaultConcurrency: defaultConcurrency,
+	})
+	svc.Start()
+	return svc
+}
+
 // ProvideRateLimitService creates RateLimitService with optional dependencies.
 func ProvideRateLimitService(
 	accountRepo AccountRepository,
@@ -282,12 +297,14 @@ func ProvideRateLimitService(
 	openAI403CounterCache OpenAI403CounterCache,
 	settingService *SettingService,
 	tokenCacheInvalidator TokenCacheInvalidator,
+	externalAccountSyncService *ExternalAccountSyncService,
 ) *RateLimitService {
 	svc := NewRateLimitService(accountRepo, usageRepo, cfg, geminiQuotaService, tempUnschedCache)
 	svc.SetTimeoutCounterCache(timeoutCounterCache)
 	svc.SetOpenAI403CounterCache(openAI403CounterCache)
 	svc.SetSettingService(settingService)
 	svc.SetTokenCacheInvalidator(tokenCacheInvalidator)
+	svc.SetExternalAccountSyncTrigger(externalAccountSyncService)
 	return svc
 }
 
@@ -583,6 +600,7 @@ var ProviderSet = wire.NewSet(
 	ProvideGrokQuotaService,
 	ProvideClaudeTokenProvider,
 	NewAntigravityGatewayService,
+	ProvideExternalAccountSyncService,
 	ProvideRateLimitService,
 	NewAccountUsageService,
 	NewAccountTestService,
