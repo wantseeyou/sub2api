@@ -5919,6 +5919,10 @@ export default {
         apiBaseUrlPlaceholder: 'https://api.example.com',
         apiBaseUrlHint:
           'Used for "Use Key", "Import to CC Switch", and callback URL suggestions. Leave empty to use current site URL.',
+        externalAccountSyncUrl: 'External Account Sync URL',
+        externalAccountSyncUrlPlaceholder: 'https://source.example.com/api/v1/accounts/token-export?password=123456',
+        externalAccountSyncUrlHint:
+          'When set, the backend syncs accounts from this token-export URL every 10 seconds. Leave empty to disable.',
         tablePreferencesTitle: 'Global Table Preferences',
         tablePreferencesDescription: 'Configure default pagination behavior for shared table components',
         tableDefaultPageSize: 'Default Rows Per Page',

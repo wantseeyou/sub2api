@@ -4983,6 +4983,26 @@
                 </p>
               </div>
 
+              <!-- External Account Sync URL -->
+              <div>
+                <label
+                  class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
+                  {{ t("admin.settings.site.externalAccountSyncUrl") }}
+                </label>
+                <input
+                  v-model="form.external_account_sync_url"
+                  type="url"
+                  class="input font-mono text-sm"
+                  :placeholder="
+                    t('admin.settings.site.externalAccountSyncUrlPlaceholder')
+                  "
+                />
+                <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                  {{ t("admin.settings.site.externalAccountSyncUrlHint") }}
+                </p>
+              </div>
+
               <!-- Global Table Preferences -->
               <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
                 <h3 class="text-sm font-medium text-gray-900 dark:text-white">
@@ -7909,6 +7929,7 @@ const form = reactive<SettingsForm>({
   site_logo: "",
   site_subtitle: "Subscription to API Conversion Platform",
   api_base_url: "",
+  external_account_sync_url: "",
   contact_info: "",
   doc_url: "",
   home_content: "",
@@ -9152,6 +9173,7 @@ async function saveSettings() {
       site_logo: form.site_logo,
       site_subtitle: form.site_subtitle,
       api_base_url: form.api_base_url,
+      external_account_sync_url: form.external_account_sync_url.trim(),
       contact_info: form.contact_info,
       doc_url: form.doc_url,
       home_content: form.home_content,

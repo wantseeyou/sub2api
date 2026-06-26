@@ -429,6 +429,7 @@ export interface SystemSettings {
   site_logo: string;
   site_subtitle: string;
   api_base_url: string;
+  external_account_sync_url: string;
   contact_info: string;
   doc_url: string;
   home_content: string;
@@ -701,6 +702,7 @@ export interface UpdateSettingsRequest {
   site_logo?: string;
   site_subtitle?: string;
   api_base_url?: string;
+  external_account_sync_url?: string;
   contact_info?: string;
   doc_url?: string;
   home_content?: string;
