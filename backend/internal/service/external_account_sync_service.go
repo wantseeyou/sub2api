@@ -177,9 +177,7 @@ func (s *ExternalAccountSyncService) run(ctx context.Context) {
 }
 
 func (s *ExternalAccountSyncService) syncWithBackgroundTimeout(parent context.Context, reason string) {
-	ctx, cancel := context.WithTimeout(parent, s.requestTimeout)
-	defer cancel()
-	if err := s.SyncOnce(ctx, reason); err != nil {
+	if err := s.SyncOnce(parent, reason); err != nil {
 		log.Printf("[ExternalAccountSync] sync failed: reason=%s err=%v", reason, err)
 	}
 }
@@ -211,6 +209,7 @@ func (s *ExternalAccountSyncService) SyncOnce(ctx context.Context, reason string
 	stats := externalAccountSyncStats{fetched: len(payload.Items)}
 	for _, item := range payload.Items {
 		if err := s.syncItem(ctx, item, &stats); err != nil {
+			// 单账号失败只记录并继续，避免一条坏数据阻断整批外部账号同步。
 			stats.failed++
 			log.Printf("[ExternalAccountSync] sync item failed: platform=%s type=%s email=%s err=%v", item.Platform, item.Type, externalSyncItemEmail(item), err)
 		}
@@ -393,7 +392,7 @@ func isExternalAccountSyncSensitiveQueryKey(key string) bool {
 		return true
 	}
 	switch key {
-	case "api_key", "apikey", "key":
+	case "api_key", "apikey", "key", "x_api_key", "signature", "sig":
 		return true
 	default:
 		return false

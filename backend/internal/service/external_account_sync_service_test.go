@@ -115,6 +115,23 @@ func TestExternalAccountSyncService_SyncOnce_UpdatesSingleMatch(t *testing.T) {
 	require.True(t, repo.updated[0].Schedulable)
 }
 
+func TestExternalAccountSyncService_SyncOnce_UpdatesInactiveToUnschedulable(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"items":[{"id":8,"name":"inactive","platform":"openai","type":"oauth","status":"inactive","credentials":{"email":"u@example.com","access_token":"new"},"extra":{}}],"total":1}`))
+	}))
+	defer server.Close()
+
+	repo := &externalSyncAccountRepoStub{
+		matches: []Account{{ID: 10, Name: "old", Platform: PlatformOpenAI, Type: AccountTypeOAuth, Status: StatusActive, Schedulable: true, Credentials: map[string]any{"email": "u@example.com"}}},
+	}
+	settings := &externalSyncSettingReaderStub{url: server.URL}
+	svc := NewExternalAccountSyncService(settings, repo, ExternalAccountSyncOptions{Interval: time.Hour, RequestTimeout: time.Second})
+
+	require.NoError(t, svc.SyncOnce(context.Background(), "test"))
+	require.Equal(t, "inactive", repo.updated[0].Status)
+	require.False(t, repo.updated[0].Schedulable)
+}
+
 func TestExternalAccountSyncService_SyncOnce_SkipsDuplicateMatches(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"items":[{"id":9,"name":"dup","platform":"openai","type":"oauth","status":"active","credentials":{"email":"u@example.com","access_token":"new"},"extra":{}}],"total":1}`))
@@ -178,6 +195,53 @@ func TestExternalAccountSyncService_StartStop_HandlesStartupSync(t *testing.T) {
 	svc.Stop()
 }
 
+func TestExternalAccountSyncService_Stop_CancelsBlockingStartupRequest(t *testing.T) {
+	requestStarted := make(chan struct{})
+	requestCanceled := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(requestStarted)
+		<-r.Context().Done()
+		close(requestCanceled)
+	}))
+	defer server.Close()
+
+	settings := &externalSyncSettingReaderStub{url: server.URL}
+	svc := NewExternalAccountSyncService(settings, &externalSyncAccountRepoStub{}, ExternalAccountSyncOptions{Interval: time.Hour, RequestTimeout: 10 * time.Second})
+
+	svc.Start()
+	require.Eventually(t, func() bool {
+		select {
+		case <-requestStarted:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, 10*time.Millisecond)
+
+	done := make(chan struct{})
+	go func() {
+		svc.Stop()
+		close(done)
+	}()
+
+	require.Eventually(t, func() bool {
+		select {
+		case <-requestCanceled:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool {
+		select {
+		case <-done:
+			return true
+		default:
+			return false
+		}
+	}, time.Second, 10*time.Millisecond)
+}
+
 func TestExternalAccountSyncService_Start_IsIdempotent(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"items":[],"total":0}`))
@@ -202,7 +266,7 @@ func TestExternalAccountSyncService_Stop_IsIdempotent(t *testing.T) {
 }
 
 func TestExternalAccountSyncService_RedactsSensitiveURLParts(t *testing.T) {
-	rawURL := "https://user:pass@example.com/api/v1/accounts/token-export?password=p&access_token=a&refresh-token=r&client_secret=s&apikey=k&safe=ok"
+	rawURL := "https://user:pass@example.com/api/v1/accounts/token-export?password=p&access_token=a&refresh-token=r&client_secret=s&apikey=k&x_api_key=x&signature=sign&sig=sig-value&safe=ok"
 
 	got := redactExternalAccountSyncURL(rawURL)
 
@@ -212,10 +276,14 @@ func TestExternalAccountSyncService_RedactsSensitiveURLParts(t *testing.T) {
 	require.Contains(t, got, "refresh-token=redacted")
 	require.Contains(t, got, "client_secret=redacted")
 	require.Contains(t, got, "apikey=redacted")
+	require.Contains(t, got, "x_api_key=redacted")
+	require.Contains(t, got, "signature=redacted")
+	require.Contains(t, got, "sig=redacted")
 	require.Contains(t, got, "safe=ok")
 	require.NotContains(t, got, "user:pass")
 	require.NotContains(t, got, "password=p")
 	require.NotContains(t, got, "access_token=a")
+	require.NotContains(t, got, "sig-value")
 }
 
 func TestExternalAccountSyncService_SanitizesHTTPErrorURL(t *testing.T) {
