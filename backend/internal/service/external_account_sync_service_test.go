@@ -95,6 +95,22 @@ func TestExternalAccountSyncService_SyncOnce_CreatesManagedAccount(t *testing.T)
 	require.Equal(t, "2026-06-26T10:00:00Z", repo.created[0].Extra["external_token_export_updated_at"])
 }
 
+func TestExternalAccountSyncService_SyncOnce_CreatesManagedAccountFromEnvelope(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"code":0,"message":"success","data":{"items":[{"id":7,"name":"src","platform":"openai","type":"oauth","status":"active","credentials":{"email":"u@example.com","access_token":"a","refresh_token":"r"},"extra":{},"updated_at":"2026-06-26T10:00:00Z"}],"total":1}}`))
+	}))
+	defer server.Close()
+
+	repo := &externalSyncAccountRepoStub{}
+	settings := &externalSyncSettingReaderStub{url: server.URL}
+	svc := NewExternalAccountSyncService(settings, repo, ExternalAccountSyncOptions{Interval: time.Hour, RequestTimeout: time.Second, DefaultConcurrency: 5})
+
+	require.NoError(t, svc.SyncOnce(context.Background(), "test"))
+	require.Equal(t, 1, repo.createCalls)
+	require.Equal(t, "u@example.com", repo.created[0].Credentials["email"])
+	require.Equal(t, true, repo.created[0].Extra["external_token_export_managed"])
+}
+
 func TestExternalAccountSyncService_SyncOnce_UpdatesSingleMatch(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`{"items":[{"id":8,"name":"new name","platform":"openai","type":"oauth","status":"active","credentials":{"email":"u@example.com","access_token":"new"},"extra":{}}],"total":1}`))

@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -63,6 +63,12 @@ type ExternalAccountSyncService struct {
 type externalAccountSyncResponse struct {
 	Items []externalAccountSyncItem `json:"items"` // 导出的账号列表。
 	Total int                       `json:"total"` // 导出总数。
+}
+
+type externalAccountSyncEnvelope struct {
+	Code    *int                        `json:"code"`    // 统一响应业务码。
+	Message string                      `json:"message"` // 统一响应消息。
+	Data    externalAccountSyncResponse `json:"data"`    // 统一响应数据。
 }
 
 type externalAccountSyncItem struct {
@@ -178,7 +184,7 @@ func (s *ExternalAccountSyncService) run(ctx context.Context) {
 
 func (s *ExternalAccountSyncService) syncWithBackgroundTimeout(parent context.Context, reason string) {
 	if err := s.SyncOnce(parent, reason); err != nil {
-		log.Printf("[ExternalAccountSync] sync failed: reason=%s err=%v", reason, err)
+		slog.Error("external_account_sync_failed", "reason", reason, "error", err)
 	}
 }
 
@@ -188,7 +194,7 @@ func (s *ExternalAccountSyncService) SyncOnce(ctx context.Context, reason string
 		return nil
 	}
 	if !atomic.CompareAndSwapInt32(&s.running, 0, 1) {
-		log.Printf("[ExternalAccountSync] skip overlapping sync: reason=%s", reason)
+		slog.Debug("external_account_sync_skip_overlapping", "reason", reason)
 		return nil
 	}
 	defer atomic.StoreInt32(&s.running, 0)
@@ -198,7 +204,7 @@ func (s *ExternalAccountSyncService) SyncOnce(ctx context.Context, reason string
 		return nil
 	}
 	if _, err := url.ParseRequestURI(rawURL); err != nil {
-		log.Printf("[ExternalAccountSync] invalid sync url: url=%s err=%v", redactExternalAccountSyncURL(rawURL), err)
+		slog.Warn("external_account_sync_invalid_url", "url", redactExternalAccountSyncURL(rawURL), "error", err)
 		return nil
 	}
 
@@ -211,10 +217,18 @@ func (s *ExternalAccountSyncService) SyncOnce(ctx context.Context, reason string
 		if err := s.syncItem(ctx, item, &stats); err != nil {
 			// 单账号失败只记录并继续，避免一条坏数据阻断整批外部账号同步。
 			stats.failed++
-			log.Printf("[ExternalAccountSync] sync item failed: platform=%s type=%s email=%s err=%v", item.Platform, item.Type, externalSyncItemEmail(item), err)
+			slog.Warn("external_account_sync_item_failed", "platform", item.Platform, "type", item.Type, "email", externalSyncItemEmail(item), "error", err)
 		}
 	}
-	log.Printf("[ExternalAccountSync] sync done: reason=%s fetched=%d skipped_email=%d created=%d updated=%d skipped_duplicate=%d failed=%d", reason, stats.fetched, stats.skippedEmail, stats.created, stats.updated, stats.skippedDuplicate, stats.failed)
+	slog.Info("external_account_sync_done",
+		"reason", reason,
+		"fetched", stats.fetched,
+		"skipped_email", stats.skippedEmail,
+		"created", stats.created,
+		"updated", stats.updated,
+		"skipped_duplicate", stats.skippedDuplicate,
+		"failed", stats.failed,
+	)
 	return nil
 }
 
@@ -231,8 +245,31 @@ func (s *ExternalAccountSyncService) fetch(ctx context.Context, rawURL string) (
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
 		return nil, fmt.Errorf("token-export returned status %d from %s", resp.StatusCode, redactExternalAccountSyncURL(rawURL))
 	}
+	var raw json.RawMessage
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil, err
+	}
+	payload, err := decodeExternalAccountSyncResponse(raw)
+	if err != nil {
+		return nil, err
+	}
+	return payload, nil
+}
+
+func decodeExternalAccountSyncResponse(raw json.RawMessage) (*externalAccountSyncResponse, error) {
+	var envelope externalAccountSyncEnvelope
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return nil, err
+	}
+	if envelope.Code != nil {
+		if *envelope.Code != 0 {
+			return nil, fmt.Errorf("token-export returned code %d: %s", *envelope.Code, strings.TrimSpace(envelope.Message))
+		}
+		return &envelope.Data, nil
+	}
+
 	var payload externalAccountSyncResponse
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.Unmarshal(raw, &payload); err != nil {
 		return nil, err
 	}
 	return &payload, nil
@@ -264,7 +301,7 @@ func (s *ExternalAccountSyncService) syncItem(ctx context.Context, item external
 		stats.updated++
 	default:
 		stats.skippedDuplicate++
-		log.Printf("[ExternalAccountSync] duplicate local accounts skipped: platform=%s type=%s email=%s ids=%v", item.Platform, item.Type, email, externalAccountSyncIDs(matches))
+		slog.Warn("external_account_sync_duplicate_local_accounts", "platform", item.Platform, "type", item.Type, "email", email, "ids", externalAccountSyncIDs(matches))
 	}
 	return nil
 }
