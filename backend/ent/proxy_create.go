@@ -13,6 +13,7 @@ import (
 	"entgo.io/ent/schema/field"
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
 // ProxyCreate is the builder for creating a Proxy entity.
@@ -127,6 +128,34 @@ func (_c *ProxyCreate) SetStatus(v string) *ProxyCreate {
 func (_c *ProxyCreate) SetNillableStatus(v *string) *ProxyCreate {
 	if v != nil {
 		_c.SetStatus(*v)
+	}
+	return _c
+}
+
+// SetTimezone sets the "timezone" field.
+func (_c *ProxyCreate) SetTimezone(v string) *ProxyCreate {
+	_c.mutation.SetTimezone(v)
+	return _c
+}
+
+// SetNillableTimezone sets the "timezone" field if the given value is not nil.
+func (_c *ProxyCreate) SetNillableTimezone(v *string) *ProxyCreate {
+	if v != nil {
+		_c.SetTimezone(*v)
+	}
+	return _c
+}
+
+// SetTimezoneDetection sets the "timezone_detection" field.
+func (_c *ProxyCreate) SetTimezoneDetection(v domain.IPGeolocation) *ProxyCreate {
+	_c.mutation.SetTimezoneDetection(v)
+	return _c
+}
+
+// SetNillableTimezoneDetection sets the "timezone_detection" field if the given value is not nil.
+func (_c *ProxyCreate) SetNillableTimezoneDetection(v *domain.IPGeolocation) *ProxyCreate {
+	if v != nil {
+		_c.SetTimezoneDetection(*v)
 	}
 	return _c
 }
@@ -277,6 +306,10 @@ func (_c *ProxyCreate) defaults() error {
 		v := proxy.DefaultStatus
 		_c.mutation.SetStatus(v)
 	}
+	if _, ok := _c.mutation.Timezone(); !ok {
+		v := proxy.DefaultTimezone
+		_c.mutation.SetTimezone(v)
+	}
 	if _, ok := _c.mutation.FallbackMode(); !ok {
 		v := proxy.DefaultFallbackMode
 		_c.mutation.SetFallbackMode(v)
@@ -339,6 +372,14 @@ func (_c *ProxyCreate) check() error {
 	if v, ok := _c.mutation.Status(); ok {
 		if err := proxy.StatusValidator(v); err != nil {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Proxy.status": %w`, err)}
+		}
+	}
+	if _, ok := _c.mutation.Timezone(); !ok {
+		return &ValidationError{Name: "timezone", err: errors.New(`ent: missing required field "Proxy.timezone"`)}
+	}
+	if v, ok := _c.mutation.Timezone(); ok {
+		if err := proxy.TimezoneValidator(v); err != nil {
+			return &ValidationError{Name: "timezone", err: fmt.Errorf(`ent: validator failed for field "Proxy.timezone": %w`, err)}
 		}
 	}
 	if _, ok := _c.mutation.FallbackMode(); !ok {
@@ -418,6 +459,14 @@ func (_c *ProxyCreate) createSpec() (*Proxy, *sqlgraph.CreateSpec) {
 	if value, ok := _c.mutation.Status(); ok {
 		_spec.SetField(proxy.FieldStatus, field.TypeString, value)
 		_node.Status = value
+	}
+	if value, ok := _c.mutation.Timezone(); ok {
+		_spec.SetField(proxy.FieldTimezone, field.TypeString, value)
+		_node.Timezone = value
+	}
+	if value, ok := _c.mutation.TimezoneDetection(); ok {
+		_spec.SetField(proxy.FieldTimezoneDetection, field.TypeJSON, value)
+		_node.TimezoneDetection = value
 	}
 	if value, ok := _c.mutation.ExpiresAt(); ok {
 		_spec.SetField(proxy.FieldExpiresAt, field.TypeTime, value)
@@ -661,6 +710,36 @@ func (u *ProxyUpsert) SetStatus(v string) *ProxyUpsert {
 // UpdateStatus sets the "status" field to the value that was provided on create.
 func (u *ProxyUpsert) UpdateStatus() *ProxyUpsert {
 	u.SetExcluded(proxy.FieldStatus)
+	return u
+}
+
+// SetTimezone sets the "timezone" field.
+func (u *ProxyUpsert) SetTimezone(v string) *ProxyUpsert {
+	u.Set(proxy.FieldTimezone, v)
+	return u
+}
+
+// UpdateTimezone sets the "timezone" field to the value that was provided on create.
+func (u *ProxyUpsert) UpdateTimezone() *ProxyUpsert {
+	u.SetExcluded(proxy.FieldTimezone)
+	return u
+}
+
+// SetTimezoneDetection sets the "timezone_detection" field.
+func (u *ProxyUpsert) SetTimezoneDetection(v domain.IPGeolocation) *ProxyUpsert {
+	u.Set(proxy.FieldTimezoneDetection, v)
+	return u
+}
+
+// UpdateTimezoneDetection sets the "timezone_detection" field to the value that was provided on create.
+func (u *ProxyUpsert) UpdateTimezoneDetection() *ProxyUpsert {
+	u.SetExcluded(proxy.FieldTimezoneDetection)
+	return u
+}
+
+// ClearTimezoneDetection clears the value of the "timezone_detection" field.
+func (u *ProxyUpsert) ClearTimezoneDetection() *ProxyUpsert {
+	u.SetNull(proxy.FieldTimezoneDetection)
 	return u
 }
 
@@ -926,6 +1005,41 @@ func (u *ProxyUpsertOne) SetStatus(v string) *ProxyUpsertOne {
 func (u *ProxyUpsertOne) UpdateStatus() *ProxyUpsertOne {
 	return u.Update(func(s *ProxyUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetTimezone sets the "timezone" field.
+func (u *ProxyUpsertOne) SetTimezone(v string) *ProxyUpsertOne {
+	return u.Update(func(s *ProxyUpsert) {
+		s.SetTimezone(v)
+	})
+}
+
+// UpdateTimezone sets the "timezone" field to the value that was provided on create.
+func (u *ProxyUpsertOne) UpdateTimezone() *ProxyUpsertOne {
+	return u.Update(func(s *ProxyUpsert) {
+		s.UpdateTimezone()
+	})
+}
+
+// SetTimezoneDetection sets the "timezone_detection" field.
+func (u *ProxyUpsertOne) SetTimezoneDetection(v domain.IPGeolocation) *ProxyUpsertOne {
+	return u.Update(func(s *ProxyUpsert) {
+		s.SetTimezoneDetection(v)
+	})
+}
+
+// UpdateTimezoneDetection sets the "timezone_detection" field to the value that was provided on create.
+func (u *ProxyUpsertOne) UpdateTimezoneDetection() *ProxyUpsertOne {
+	return u.Update(func(s *ProxyUpsert) {
+		s.UpdateTimezoneDetection()
+	})
+}
+
+// ClearTimezoneDetection clears the value of the "timezone_detection" field.
+func (u *ProxyUpsertOne) ClearTimezoneDetection() *ProxyUpsertOne {
+	return u.Update(func(s *ProxyUpsert) {
+		s.ClearTimezoneDetection()
 	})
 }
 
@@ -1368,6 +1482,41 @@ func (u *ProxyUpsertBulk) SetStatus(v string) *ProxyUpsertBulk {
 func (u *ProxyUpsertBulk) UpdateStatus() *ProxyUpsertBulk {
 	return u.Update(func(s *ProxyUpsert) {
 		s.UpdateStatus()
+	})
+}
+
+// SetTimezone sets the "timezone" field.
+func (u *ProxyUpsertBulk) SetTimezone(v string) *ProxyUpsertBulk {
+	return u.Update(func(s *ProxyUpsert) {
+		s.SetTimezone(v)
+	})
+}
+
+// UpdateTimezone sets the "timezone" field to the value that was provided on create.
+func (u *ProxyUpsertBulk) UpdateTimezone() *ProxyUpsertBulk {
+	return u.Update(func(s *ProxyUpsert) {
+		s.UpdateTimezone()
+	})
+}
+
+// SetTimezoneDetection sets the "timezone_detection" field.
+func (u *ProxyUpsertBulk) SetTimezoneDetection(v domain.IPGeolocation) *ProxyUpsertBulk {
+	return u.Update(func(s *ProxyUpsert) {
+		s.SetTimezoneDetection(v)
+	})
+}
+
+// UpdateTimezoneDetection sets the "timezone_detection" field to the value that was provided on create.
+func (u *ProxyUpsertBulk) UpdateTimezoneDetection() *ProxyUpsertBulk {
+	return u.Update(func(s *ProxyUpsert) {
+		s.UpdateTimezoneDetection()
+	})
+}
+
+// ClearTimezoneDetection clears the value of the "timezone_detection" field.
+func (u *ProxyUpsertBulk) ClearTimezoneDetection() *ProxyUpsertBulk {
+	return u.Update(func(s *ProxyUpsert) {
+		s.ClearTimezoneDetection()
 	})
 }
 

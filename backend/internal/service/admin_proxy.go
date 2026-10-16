@@ -155,6 +155,7 @@ func (s *adminServiceImpl) UpdateProxy(ctx context.Context, id int64, input *Upd
 	if err := s.proxyRepo.Update(ctx, proxy); err != nil {
 		return nil, err
 	}
+	s.syncProxyTimezoneCache(ctx, proxy)
 	return proxy, nil
 }
 
@@ -550,6 +551,15 @@ func (s *adminServiceImpl) probeProxyLatency(ctx context.Context, proxy *Proxy) 
 }
 
 func (s *adminServiceImpl) attachProxyLatency(ctx context.Context, proxies []ProxyWithAccountCount) {
+	// 地区信息有数据库快照时，即使 Redis 清空也能展示。
+	for i := range proxies {
+		detection := proxies[i].TimezoneDetection
+		proxies[i].IPAddress = detection.IP
+		proxies[i].Country = detection.Country
+		proxies[i].CountryCode = detection.CountryCode
+		proxies[i].Region = detection.Region
+		proxies[i].City = detection.City
+	}
 	if s.proxyLatencyCache == nil || len(proxies) == 0 {
 		return
 	}
@@ -577,11 +587,15 @@ func (s *adminServiceImpl) attachProxyLatency(ctx context.Context, proxies []Pro
 			proxies[i].LatencyStatus = "failed"
 		}
 		proxies[i].LatencyMessage = info.Message
-		proxies[i].IPAddress = info.IPAddress
-		proxies[i].Country = info.Country
-		proxies[i].CountryCode = info.CountryCode
-		proxies[i].Region = info.Region
-		proxies[i].City = info.City
+		// 较新的连接检测可能已获取轮换后的出口，优先展示其地区；失败时保留数据库快照。
+		detectedAt, detectedAtErr := time.Parse(time.RFC3339, proxies[i].TimezoneDetection.DetectedAt)
+		if info.IPAddress != "" && (detectedAtErr != nil || !info.UpdatedAt.Before(detectedAt)) {
+			proxies[i].IPAddress = info.IPAddress
+			proxies[i].Country = info.Country
+			proxies[i].CountryCode = info.CountryCode
+			proxies[i].Region = info.Region
+			proxies[i].City = info.City
+		}
 		proxies[i].QualityStatus = info.QualityStatus
 		proxies[i].QualityScore = info.QualityScore
 		proxies[i].QualityGrade = info.QualityGrade

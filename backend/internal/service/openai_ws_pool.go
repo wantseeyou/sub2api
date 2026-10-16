@@ -84,6 +84,7 @@ type openAIWSAcquireRequest struct {
 }
 
 type openAIWSHandshakeCompatibilityKey struct {
+	proxyURL            string // 连接实际使用的代理地址，避免复用其他出口的连接。
 	betaFeatures        string
 	codexInstallationID string
 	sessionIDHyphen     string
@@ -1146,6 +1147,7 @@ func (p *openAIWSConnPool) acquire(ctx context.Context, req openAIWSAcquireReque
 retryAcquire:
 	accountID := req.Account.ID
 	compatibility := normalizeOpenAIWSHandshakeCompatibility(req.Account, req.Headers)
+	compatibility.proxyURL = req.ProxyURL
 	routingAffinity := normalizeOpenAIWSRoutingAffinity(req.Headers)
 	effectiveMaxConns := p.effectiveMaxConnsByAccount(req.Account)
 	if effectiveMaxConns <= 0 {
@@ -2153,6 +2155,7 @@ func (p *openAIWSConnPool) dialConn(ctx context.Context, req openAIWSAcquireRequ
 	evict := func() { p.evictConn(accountID, id) }
 	pooledConn.onPeerClosed.Store(&evict)
 	pooledConn.handshakeCompatibility = normalizeOpenAIWSHandshakeCompatibility(req.Account, req.Headers)
+	pooledConn.handshakeCompatibility.proxyURL = req.ProxyURL
 	pooledConn.routingAffinity = normalizeOpenAIWSRoutingAffinity(req.Headers)
 	return pooledConn, nil
 }

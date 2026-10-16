@@ -2,6 +2,20 @@
 
 This directory contains files for deploying Sub2API on Linux servers and Apple-silicon Macs.
 
+## Fork Release Source
+
+Install, upgrade, and rollback use [wantseeyou/sub2api Releases](https://github.com/wantseeyou/sub2api/releases). Container deployments use `ghcr.io/wantseeyou/sub2api`.
+
+Commit these changes and publish a new version before upgrading a server. Already published releases retain the update source they were built with; publishing does not include uncommitted local changes.
+
+For an existing binary installation, switch sources using the current script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/wantseeyou/sub2api/main/deploy/install.sh | sudo bash -s -- upgrade
+```
+
+For an existing Docker deployment, change the application's `image` to `ghcr.io/wantseeyou/sub2api:latest` in its Compose file, then run `docker compose pull sub2api` and `docker compose up -d sub2api` with that file. Existing Compose files are not changed by publishing a release.
+
 ## Deployment Methods
 
 | Method | Best For | Setup Wizard |
@@ -20,7 +34,7 @@ This directory contains files for deploying Sub2API on Linux servers and Apple-s
 | `apple-container.sh` | Native Apple `container` lifecycle script |
 | `APPLE_CONTAINER.md` | Apple `container` deployment and operations guide |
 | `.env.example` | Container environment variables template |
-| `DOCKER.md` | Docker Hub documentation |
+| `DOCKER.md` | GHCR image documentation |
 | `install.sh` | One-click binary installation script |
 | `install-datamanagementd.sh` | datamanagementd 一键安装脚本 |
 | `sub2api.service` | Systemd service unit file |
@@ -56,10 +70,10 @@ Use the automated preparation script for the easiest setup:
 
 ```bash
 # Download and run the preparation script
-curl -sSL https://raw.githubusercontent.com/Wei-Shaw/sub2api/main/deploy/docker-deploy.sh | bash
+curl -sSL https://raw.githubusercontent.com/wantseeyou/sub2api/main/deploy/docker-deploy.sh | bash
 
 # Or download first, then run
-curl -sSL https://raw.githubusercontent.com/Wei-Shaw/sub2api/main/deploy/docker-deploy.sh -o docker-deploy.sh
+curl -sSL https://raw.githubusercontent.com/wantseeyou/sub2api/main/deploy/docker-deploy.sh -o docker-deploy.sh
 chmod +x docker-deploy.sh
 ./docker-deploy.sh
 ```
@@ -92,7 +106,7 @@ If you prefer manual control:
 
 ```bash
 # Clone repository
-git clone https://github.com/Wei-Shaw/sub2api.git
+git clone https://github.com/wantseeyou/sub2api.git
 cd sub2api/deploy
 
 # Configure environment
@@ -398,12 +412,12 @@ For production servers using systemd.
 ### One-Line Installation
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/Wei-Shaw/sub2api/main/deploy/install.sh | sudo bash
+curl -sSL https://raw.githubusercontent.com/wantseeyou/sub2api/main/deploy/install.sh | sudo bash
 ```
 
 ### Manual Installation
 
-1. Download the latest release from [GitHub Releases](https://github.com/Wei-Shaw/sub2api/releases)
+1. Download the latest release from [GitHub Releases](https://github.com/wantseeyou/sub2api/releases)
 2. Extract and copy the binary to `/opt/sub2api/`
 3. Copy `sub2api.service` to `/etc/systemd/system/`
 4. Run:

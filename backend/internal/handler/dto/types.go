@@ -437,16 +437,18 @@ type AccountGroup struct {
 }
 
 type Proxy struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	Protocol  string    `json:"protocol"`
-	Host      string    `json:"host"`
-	Port      int       `json:"port"`
-	Username  string    `json:"username"`
-	Password  string    `json:"-"`
-	Status    string    `json:"status"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID                int64                `json:"id"`
+	Name              string               `json:"name"`
+	Protocol          string               `json:"protocol"`
+	Host              string               `json:"host"`
+	Port              int                  `json:"port"`
+	Username          string               `json:"username"`
+	Password          string               `json:"-"`
+	Status            string               `json:"status"`
+	CreatedAt         time.Time            `json:"created_at"`
+	UpdatedAt         time.Time            `json:"updated_at"`
+	Timezone          string               `json:"timezone"`           // 管理员保存的 IANA 时区。
+	TimezoneDetection domain.IPGeolocation `json:"timezone_detection"` // 代理出口最近成功检测结果。
 
 	ExpiresAt      *time.Time `json:"expires_at"`
 	FallbackMode   string     `json:"fallback_mode"`

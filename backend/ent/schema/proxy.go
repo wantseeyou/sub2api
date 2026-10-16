@@ -2,6 +2,7 @@ package schema
 
 import (
 	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"
@@ -52,6 +53,10 @@ func (Proxy) Fields() []ent.Field {
 		field.String("status").
 			MaxLen(20).
 			Default("active"),
+		field.String("timezone").MaxLen(100).Default("").
+			Comment("管理员保存的 IANA 时区，空值表示尚未设置。"),
+		field.JSON("timezone_detection", domain.IPGeolocation{}).Optional().
+			Comment("代理出口最近成功检测的 IP、地区和时区。"),
 		field.Time("expires_at").
 			Optional().Nillable().
 			Comment("Proxy expiration time (NULL means never expires)."),

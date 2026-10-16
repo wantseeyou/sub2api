@@ -155,6 +155,18 @@ export async function testProxy(id: number): Promise<{
   return data
 }
 
+// 保存指定代理的手动时区。
+export async function saveProxyTimezone(id: number, timezone: string): Promise<Proxy> {
+  const { data } = await apiClient.put<Proxy>(`/admin/proxies/${id}/timezone`, { timezone })
+  return data
+}
+
+// 通过代理出口检测地区时区，并按需应用到设置。
+export async function detectProxyTimezone(id: number, apply: boolean): Promise<Proxy> {
+  const { data } = await apiClient.post<Proxy>(`/admin/proxies/${id}/timezone/detect`, { apply })
+  return data
+}
+
 /**
  * Check proxy quality across common AI targets
  * @param id - Proxy ID

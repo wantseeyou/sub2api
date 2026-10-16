@@ -5,6 +5,8 @@ import (
 	"net/url"
 	"strconv"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
 const (
@@ -14,20 +16,22 @@ const (
 )
 
 type Proxy struct {
-	ID             int64
-	Name           string
-	Protocol       string
-	Host           string
-	Port           int
-	Username       string
-	Password       string
-	Status         string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
-	ExpiresAt      *time.Time
-	FallbackMode   string
-	BackupProxyID  *int64
-	ExpiryWarnDays int
+	ID                int64
+	Name              string
+	Protocol          string
+	Host              string
+	Port              int
+	Username          string
+	Password          string
+	Status            string
+	Timezone          string               // 管理员保存的 IANA 时区。
+	TimezoneDetection domain.IPGeolocation // 该代理出口最近成功检测的地区和时区。
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
+	ExpiresAt         *time.Time
+	FallbackMode      string
+	BackupProxyID     *int64
+	ExpiryWarnDays    int
 }
 
 func (p *Proxy) IsActive() bool {

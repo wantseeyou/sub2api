@@ -3,6 +3,7 @@
 package ent
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
 // Proxy is the model entity for the Proxy schema.
@@ -37,6 +39,10 @@ type Proxy struct {
 	Password *string `json:"password,omitempty"`
 	// Status holds the value of the "status" field.
 	Status string `json:"status,omitempty"`
+	// 管理员保存的 IANA 时区，空值表示尚未设置。
+	Timezone string `json:"timezone,omitempty"`
+	// 代理出口最近成功检测的 IP、地区和时区。
+	TimezoneDetection domain.IPGeolocation `json:"timezone_detection,omitempty"`
 	// Proxy expiration time (NULL means never expires).
 	ExpiresAt *time.Time `json:"expires_at,omitempty"`
 	// Fallback target on expiry: none | proxy | direct.
@@ -98,9 +104,11 @@ func (*Proxy) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case proxy.FieldTimezoneDetection:
+			values[i] = new([]byte)
 		case proxy.FieldID, proxy.FieldPort, proxy.FieldBackupProxyID, proxy.FieldExpiryWarnDays:
 			values[i] = new(sql.NullInt64)
-		case proxy.FieldName, proxy.FieldProtocol, proxy.FieldHost, proxy.FieldUsername, proxy.FieldPassword, proxy.FieldStatus, proxy.FieldFallbackMode:
+		case proxy.FieldName, proxy.FieldProtocol, proxy.FieldHost, proxy.FieldUsername, proxy.FieldPassword, proxy.FieldStatus, proxy.FieldTimezone, proxy.FieldFallbackMode:
 			values[i] = new(sql.NullString)
 		case proxy.FieldCreatedAt, proxy.FieldUpdatedAt, proxy.FieldDeletedAt, proxy.FieldExpiresAt:
 			values[i] = new(sql.NullTime)
@@ -187,6 +195,20 @@ func (_m *Proxy) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field status", values[i])
 			} else if value.Valid {
 				_m.Status = value.String
+			}
+		case proxy.FieldTimezone:
+			if value, ok := values[i].(*sql.NullString); !ok {
+				return fmt.Errorf("unexpected type %T for field timezone", values[i])
+			} else if value.Valid {
+				_m.Timezone = value.String
+			}
+		case proxy.FieldTimezoneDetection:
+			if value, ok := values[i].(*[]byte); !ok {
+				return fmt.Errorf("unexpected type %T for field timezone_detection", values[i])
+			} else if value != nil && len(*value) > 0 {
+				if err := json.Unmarshal(*value, &_m.TimezoneDetection); err != nil {
+					return fmt.Errorf("unmarshal field timezone_detection: %w", err)
+				}
 			}
 		case proxy.FieldExpiresAt:
 			if value, ok := values[i].(*sql.NullTime); !ok {
@@ -300,6 +322,12 @@ func (_m *Proxy) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("status=")
 	builder.WriteString(_m.Status)
+	builder.WriteString(", ")
+	builder.WriteString("timezone=")
+	builder.WriteString(_m.Timezone)
+	builder.WriteString(", ")
+	builder.WriteString("timezone_detection=")
+	builder.WriteString(fmt.Sprintf("%v", _m.TimezoneDetection))
 	builder.WriteString(", ")
 	if v := _m.ExpiresAt; v != nil {
 		builder.WriteString("expires_at=")

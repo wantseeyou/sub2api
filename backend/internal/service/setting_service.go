@@ -144,6 +144,9 @@ type SettingService struct {
 	panelRateLimitCache atomic.Value
 	panelRateLimitSF    singleflight.Group
 
+	gatewayTimezoneMu    sync.Mutex                     // 串行化网关时区的读取、保存和缓存更新。
+	gatewayTimezoneCache *cachedGatewayTimezoneSettings // 网关时区与最近检测结果的进程内缓存。
+
 	// openAIQuotaAutoPauseSettingsCache holds the most recently observed quota auto-pause
 	// settings. GetOpenAIQuotaAutoPauseSettings reads this atomic.Value on the request hot
 	// path without ever blocking on the DB; when the cached entry expires, a background

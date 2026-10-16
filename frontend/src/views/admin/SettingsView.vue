@@ -203,6 +203,7 @@
 
         <!-- Tab: Gateway -->
         <div v-show="activeTab === 'gateway'" class="space-y-6">
+          <GatewayTimezoneSettings :active="activeTab === 'gateway'" />
           <!-- Overload Cooldown (529) Settings -->
           <div class="card">
             <div
@@ -9033,6 +9034,7 @@ import ImageUpload from "@/components/common/ImageUpload.vue";
 import BackupSettings from "@/views/admin/BackupView.vue";
 import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue";
 import RechargeBonusTierEditor from "@/components/admin/settings/RechargeBonusTierEditor.vue";
+import GatewayTimezoneSettings from "@/components/admin/settings/GatewayTimezoneSettings.vue";
 import {
   normalizeRechargeBonusMode,
   normalizeRechargeBonusTiers,

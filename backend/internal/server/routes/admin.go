@@ -528,6 +528,8 @@ func registerProxyRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAuth
 		proxies.PUT("/:id", h.Admin.Proxy.Update)
 		proxies.DELETE("/:id", h.Admin.Proxy.Delete)
 		proxies.POST("/:id/test", h.Admin.Proxy.Test)
+		proxies.PUT("/:id/timezone", h.Admin.Proxy.SetTimezone)
+		proxies.POST("/:id/timezone/detect", h.Admin.Proxy.DetectTimezone)
 		proxies.POST("/:id/quality-check", h.Admin.Proxy.CheckQuality)
 		proxies.GET("/:id/stats", h.Admin.Proxy.GetStats)
 		proxies.GET("/:id/accounts", h.Admin.Proxy.GetProxyAccounts)
@@ -592,6 +594,10 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		// 面板 API 限流配置
 		adminSettings.GET("/panel-rate-limit", h.Admin.Setting.GetPanelRateLimitSettings)
 		adminSettings.PUT("/panel-rate-limit", h.Admin.Setting.UpdatePanelRateLimitSettings)
+		// 独立网关时区设置与服务器直连出口检测。
+		adminSettings.GET("/gateway-timezone", h.Admin.Setting.GetGatewayTimezoneSettings)
+		adminSettings.PUT("/gateway-timezone", h.Admin.Setting.UpdateGatewayTimezoneSettings)
+		adminSettings.POST("/gateway-timezone/detect", h.Admin.Setting.DetectGatewayTimezone)
 		// 流超时处理配置
 		adminSettings.GET("/stream-timeout", h.Admin.Setting.GetStreamTimeoutSettings)
 		adminSettings.PUT("/stream-timeout", h.Admin.Setting.UpdateStreamTimeoutSettings)

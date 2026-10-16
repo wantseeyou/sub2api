@@ -37521,6 +37521,8 @@ type ProxyMutation struct {
 	username               *string
 	password               *string
 	status                 *string
+	timezone               *string
+	timezone_detection     *domain.IPGeolocation
 	expires_at             *time.Time
 	fallback_mode          *string
 	expiry_warn_days       *int
@@ -38056,6 +38058,91 @@ func (m *ProxyMutation) ResetStatus() {
 	m.status = nil
 }
 
+// SetTimezone sets the "timezone" field.
+func (m *ProxyMutation) SetTimezone(s string) {
+	m.timezone = &s
+}
+
+// Timezone returns the value of the "timezone" field in the mutation.
+func (m *ProxyMutation) Timezone() (r string, exists bool) {
+	v := m.timezone
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTimezone returns the old "timezone" field's value of the Proxy entity.
+// If the Proxy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProxyMutation) OldTimezone(ctx context.Context) (v string, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTimezone is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTimezone requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTimezone: %w", err)
+	}
+	return oldValue.Timezone, nil
+}
+
+// ResetTimezone resets all changes to the "timezone" field.
+func (m *ProxyMutation) ResetTimezone() {
+	m.timezone = nil
+}
+
+// SetTimezoneDetection sets the "timezone_detection" field.
+func (m *ProxyMutation) SetTimezoneDetection(dg domain.IPGeolocation) {
+	m.timezone_detection = &dg
+}
+
+// TimezoneDetection returns the value of the "timezone_detection" field in the mutation.
+func (m *ProxyMutation) TimezoneDetection() (r domain.IPGeolocation, exists bool) {
+	v := m.timezone_detection
+	if v == nil {
+		return
+	}
+	return *v, true
+}
+
+// OldTimezoneDetection returns the old "timezone_detection" field's value of the Proxy entity.
+// If the Proxy object wasn't provided to the builder, the object is fetched from the database.
+// An error is returned if the mutation operation is not UpdateOne, or the database query fails.
+func (m *ProxyMutation) OldTimezoneDetection(ctx context.Context) (v domain.IPGeolocation, err error) {
+	if !m.op.Is(OpUpdateOne) {
+		return v, errors.New("OldTimezoneDetection is only allowed on UpdateOne operations")
+	}
+	if m.id == nil || m.oldValue == nil {
+		return v, errors.New("OldTimezoneDetection requires an ID field in the mutation")
+	}
+	oldValue, err := m.oldValue(ctx)
+	if err != nil {
+		return v, fmt.Errorf("querying old value for OldTimezoneDetection: %w", err)
+	}
+	return oldValue.TimezoneDetection, nil
+}
+
+// ClearTimezoneDetection clears the value of the "timezone_detection" field.
+func (m *ProxyMutation) ClearTimezoneDetection() {
+	m.timezone_detection = nil
+	m.clearedFields[proxy.FieldTimezoneDetection] = struct{}{}
+}
+
+// TimezoneDetectionCleared returns if the "timezone_detection" field was cleared in this mutation.
+func (m *ProxyMutation) TimezoneDetectionCleared() bool {
+	_, ok := m.clearedFields[proxy.FieldTimezoneDetection]
+	return ok
+}
+
+// ResetTimezoneDetection resets all changes to the "timezone_detection" field.
+func (m *ProxyMutation) ResetTimezoneDetection() {
+	m.timezone_detection = nil
+	delete(m.clearedFields, proxy.FieldTimezoneDetection)
+}
+
 // SetExpiresAt sets the "expires_at" field.
 func (m *ProxyMutation) SetExpiresAt(t time.Time) {
 	m.expires_at = &t
@@ -38415,7 +38502,7 @@ func (m *ProxyMutation) Type() string {
 // order to get all numeric fields that were incremented/decremented, call
 // AddedFields().
 func (m *ProxyMutation) Fields() []string {
-	fields := make([]string, 0, 14)
+	fields := make([]string, 0, 16)
 	if m.created_at != nil {
 		fields = append(fields, proxy.FieldCreatedAt)
 	}
@@ -38445,6 +38532,12 @@ func (m *ProxyMutation) Fields() []string {
 	}
 	if m.status != nil {
 		fields = append(fields, proxy.FieldStatus)
+	}
+	if m.timezone != nil {
+		fields = append(fields, proxy.FieldTimezone)
+	}
+	if m.timezone_detection != nil {
+		fields = append(fields, proxy.FieldTimezoneDetection)
 	}
 	if m.expires_at != nil {
 		fields = append(fields, proxy.FieldExpiresAt)
@@ -38486,6 +38579,10 @@ func (m *ProxyMutation) Field(name string) (ent.Value, bool) {
 		return m.Password()
 	case proxy.FieldStatus:
 		return m.Status()
+	case proxy.FieldTimezone:
+		return m.Timezone()
+	case proxy.FieldTimezoneDetection:
+		return m.TimezoneDetection()
 	case proxy.FieldExpiresAt:
 		return m.ExpiresAt()
 	case proxy.FieldFallbackMode:
@@ -38523,6 +38620,10 @@ func (m *ProxyMutation) OldField(ctx context.Context, name string) (ent.Value, e
 		return m.OldPassword(ctx)
 	case proxy.FieldStatus:
 		return m.OldStatus(ctx)
+	case proxy.FieldTimezone:
+		return m.OldTimezone(ctx)
+	case proxy.FieldTimezoneDetection:
+		return m.OldTimezoneDetection(ctx)
 	case proxy.FieldExpiresAt:
 		return m.OldExpiresAt(ctx)
 	case proxy.FieldFallbackMode:
@@ -38609,6 +38710,20 @@ func (m *ProxyMutation) SetField(name string, value ent.Value) error {
 			return fmt.Errorf("unexpected type %T for field %s", value, name)
 		}
 		m.SetStatus(v)
+		return nil
+	case proxy.FieldTimezone:
+		v, ok := value.(string)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTimezone(v)
+		return nil
+	case proxy.FieldTimezoneDetection:
+		v, ok := value.(domain.IPGeolocation)
+		if !ok {
+			return fmt.Errorf("unexpected type %T for field %s", value, name)
+		}
+		m.SetTimezoneDetection(v)
 		return nil
 	case proxy.FieldExpiresAt:
 		v, ok := value.(time.Time)
@@ -38704,6 +38819,9 @@ func (m *ProxyMutation) ClearedFields() []string {
 	if m.FieldCleared(proxy.FieldPassword) {
 		fields = append(fields, proxy.FieldPassword)
 	}
+	if m.FieldCleared(proxy.FieldTimezoneDetection) {
+		fields = append(fields, proxy.FieldTimezoneDetection)
+	}
 	if m.FieldCleared(proxy.FieldExpiresAt) {
 		fields = append(fields, proxy.FieldExpiresAt)
 	}
@@ -38732,6 +38850,9 @@ func (m *ProxyMutation) ClearField(name string) error {
 		return nil
 	case proxy.FieldPassword:
 		m.ClearPassword()
+		return nil
+	case proxy.FieldTimezoneDetection:
+		m.ClearTimezoneDetection()
 		return nil
 	case proxy.FieldExpiresAt:
 		m.ClearExpiresAt()
@@ -38776,6 +38897,12 @@ func (m *ProxyMutation) ResetField(name string) error {
 		return nil
 	case proxy.FieldStatus:
 		m.ResetStatus()
+		return nil
+	case proxy.FieldTimezone:
+		m.ResetTimezone()
+		return nil
+	case proxy.FieldTimezoneDetection:
+		m.ResetTimezoneDetection()
 		return nil
 	case proxy.FieldExpiresAt:
 		m.ResetExpiresAt()

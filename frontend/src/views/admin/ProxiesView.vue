@@ -267,6 +267,15 @@
             </span>
           </template>
 
+          <template #cell-timezone="{ row }">
+            <div class="max-w-52 text-sm">
+              <span class="break-all font-mono">{{ row.timezone || t('admin.proxies.timezone.unset') }}</span>
+              <p v-if="row.timezone && row.timezone_detection?.timezone && row.timezone !== row.timezone_detection.timezone" class="mt-1 text-xs text-red-600 dark:text-red-400">
+                {{ t('admin.proxies.timezone.different') }}
+              </p>
+            </div>
+          </template>
+
           <template #cell-actions="{ row }">
             <div class="flex items-center gap-1">
               <button
@@ -324,6 +333,13 @@
                 </svg>
                 <Icon v-else name="shield" size="sm" />
                 <span class="text-xs">{{ t('admin.proxies.qualityCheck') }}</span>
+              </button>
+              <button
+                @click="timezoneProxy = row"
+                class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
+              >
+                <Icon name="clock" size="sm" />
+                <span class="whitespace-nowrap text-xs">{{ t('admin.proxies.timezone.action') }}</span>
               </button>
               <button
                 @click="handleEdit(row)"
@@ -960,6 +976,7 @@
         </div>
       </template>
     </BaseDialog>
+    <ProxyTimezoneDialog v-if="timezoneProxy" :key="timezoneProxy.id" :proxy="timezoneProxy" @close="timezoneProxy = null" @updated="updateProxyTimezone" />
   </AppLayout>
 </template>
 
@@ -978,6 +995,7 @@ import BaseDialog from '@/components/common/BaseDialog.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ImportDataModal from '@/components/admin/proxy/ImportDataModal.vue'
+import ProxyTimezoneDialog from '@/components/admin/proxy/ProxyTimezoneDialog.vue'
 import Select from '@/components/common/Select.vue'
 import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
 import Icon from '@/components/icons/Icon.vue'
@@ -992,6 +1010,23 @@ import { proxyExpiryBadgeClass, proxyExpiryLabelKey } from '@/utils/proxyExpiry'
 const { t } = useI18n()
 const appStore = useAppStore()
 const { copyToClipboard } = useClipboard()
+const timezoneProxy = ref<Proxy | null>(null)
+
+// 独立更新时区列和地区展示，保留列表中的其他检测状态。
+function updateProxyTimezone(updated: Proxy): void {
+  const target = proxies.value.find(proxy => proxy.id === updated.id)
+  if (!target) return
+  target.timezone = updated.timezone
+  target.timezone_detection = updated.timezone_detection
+  const detection = updated.timezone_detection
+  if (detection?.ip) {
+    target.ip_address = detection.ip
+    target.country = detection.country
+    target.country_code = detection.country_code
+    target.region = detection.region
+    target.city = detection.city
+  }
+}
 
 const columns = computed<Column[]>(() => [
   { key: 'select', label: '', sortable: false },
@@ -1005,6 +1040,7 @@ const columns = computed<Column[]>(() => [
   { key: 'expiry', label: t('admin.proxies.columns.expiry'), sortable: true },
   { key: 'created_at', label: t('admin.proxies.columns.createdAt'), sortable: true },
   { key: 'status', label: t('admin.proxies.columns.status'), sortable: true },
+  { key: 'timezone', label: t('admin.proxies.columns.timezone'), sortable: false },
   { key: 'actions', label: t('admin.proxies.columns.actions'), sortable: false }
 ])
 

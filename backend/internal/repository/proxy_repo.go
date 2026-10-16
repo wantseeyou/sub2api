@@ -176,6 +176,13 @@ func updateProxyAndInvalidateProbeSnapshots(ctx context.Context, client *dbent.C
 	} else {
 		builder.ClearBackupProxyID()
 	}
+	// 连接信息变化后旧出口检测失效；保留管理员设置的时区。
+	nextIdentity := proxyProbeIdentityFromService(proxyIn)
+	currentConnection := currentIdentity
+	currentConnection.status = nextIdentity.status
+	if currentConnection != nextIdentity {
+		builder.ClearTimezoneDetection()
+	}
 
 	updated, err := builder.Save(ctx)
 	if dbent.IsNotFound(err) {
@@ -589,18 +596,20 @@ func proxyEntityToService(m *dbent.Proxy) *service.Proxy {
 		return nil
 	}
 	out := &service.Proxy{
-		ID:             m.ID,
-		Name:           m.Name,
-		Protocol:       m.Protocol,
-		Host:           m.Host,
-		Port:           m.Port,
-		Status:         m.Status,
-		CreatedAt:      m.CreatedAt,
-		UpdatedAt:      m.UpdatedAt,
-		ExpiresAt:      m.ExpiresAt,
-		FallbackMode:   m.FallbackMode,
-		BackupProxyID:  m.BackupProxyID,
-		ExpiryWarnDays: m.ExpiryWarnDays,
+		ID:                m.ID,
+		Name:              m.Name,
+		Protocol:          m.Protocol,
+		Host:              m.Host,
+		Port:              m.Port,
+		Status:            m.Status,
+		CreatedAt:         m.CreatedAt,
+		UpdatedAt:         m.UpdatedAt,
+		Timezone:          m.Timezone,
+		TimezoneDetection: m.TimezoneDetection,
+		ExpiresAt:         m.ExpiresAt,
+		FallbackMode:      m.FallbackMode,
+		BackupProxyID:     m.BackupProxyID,
+		ExpiryWarnDays:    m.ExpiryWarnDays,
 	}
 	if m.Username != nil {
 		out.Username = *m.Username
@@ -618,6 +627,8 @@ func applyProxyEntityToService(dst *service.Proxy, src *dbent.Proxy) {
 	dst.ID = src.ID
 	dst.CreatedAt = src.CreatedAt
 	dst.UpdatedAt = src.UpdatedAt
+	dst.Timezone = src.Timezone
+	dst.TimezoneDetection = src.TimezoneDetection
 }
 
 // ListAllForFallback 返回所有代理（含过期/非活跃），供改投逻辑使用。

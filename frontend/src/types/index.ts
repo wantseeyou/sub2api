@@ -955,6 +955,16 @@ export interface ClaudeModel {
   created_at: string
 }
 
+export interface IPGeolocation {
+  ip: string // 公网出口 IP。
+  country: string // 国家名称。
+  country_code: string // 国家代码。
+  region: string // 州或省名称。
+  city: string // 城市名称。
+  timezone: string // IANA 时区。
+  detected_at: string // 最近成功检测时间。
+}
+
 export interface Proxy {
   id: number
   name: string
@@ -964,6 +974,8 @@ export interface Proxy {
   username: string | null
   password?: string | null
   status: 'active' | 'inactive' | 'expired'
+  timezone?: string // 管理员保存的时区。
+  timezone_detection?: IPGeolocation // 数据库保存的最近成功检测结果。
   account_count?: number // Number of accounts using this proxy
   latency_ms?: number
   latency_status?: 'success' | 'failed'

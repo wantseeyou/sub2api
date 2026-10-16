@@ -58,6 +58,13 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		return nil, errors.New("codex_cli_only restriction: only codex official clients are allowed")
 	}
 
+	// 账号和实际代理已经确定；在 HTTP 透传与协议转换分流前统一处理环境时间。
+	timeBody, timeErr := s.rewriteCodexEnvironmentTime(ctx, account, body, startTime)
+	if timeErr != nil {
+		return nil, timeErr
+	}
+	body = timeBody
+
 	normalizedBody, normalized, err := normalizeOpenAICodexCompactReasoningEffortForAccount(c, account, body)
 	if err != nil {
 		return nil, err

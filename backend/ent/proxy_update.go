@@ -14,6 +14,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
 	"github.com/Wei-Shaw/sub2api/ent/proxy"
+	"github.com/Wei-Shaw/sub2api/internal/domain"
 )
 
 // ProxyUpdate is the builder for updating Proxy entities.
@@ -169,6 +170,40 @@ func (_u *ProxyUpdate) SetNillableStatus(v *string) *ProxyUpdate {
 	if v != nil {
 		_u.SetStatus(*v)
 	}
+	return _u
+}
+
+// SetTimezone sets the "timezone" field.
+func (_u *ProxyUpdate) SetTimezone(v string) *ProxyUpdate {
+	_u.mutation.SetTimezone(v)
+	return _u
+}
+
+// SetNillableTimezone sets the "timezone" field if the given value is not nil.
+func (_u *ProxyUpdate) SetNillableTimezone(v *string) *ProxyUpdate {
+	if v != nil {
+		_u.SetTimezone(*v)
+	}
+	return _u
+}
+
+// SetTimezoneDetection sets the "timezone_detection" field.
+func (_u *ProxyUpdate) SetTimezoneDetection(v domain.IPGeolocation) *ProxyUpdate {
+	_u.mutation.SetTimezoneDetection(v)
+	return _u
+}
+
+// SetNillableTimezoneDetection sets the "timezone_detection" field if the given value is not nil.
+func (_u *ProxyUpdate) SetNillableTimezoneDetection(v *domain.IPGeolocation) *ProxyUpdate {
+	if v != nil {
+		_u.SetTimezoneDetection(*v)
+	}
+	return _u
+}
+
+// ClearTimezoneDetection clears the value of the "timezone_detection" field.
+func (_u *ProxyUpdate) ClearTimezoneDetection() *ProxyUpdate {
+	_u.mutation.ClearTimezoneDetection()
 	return _u
 }
 
@@ -409,6 +444,11 @@ func (_u *ProxyUpdate) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Proxy.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Timezone(); ok {
+		if err := proxy.TimezoneValidator(v); err != nil {
+			return &ValidationError{Name: "timezone", err: fmt.Errorf(`ent: validator failed for field "Proxy.timezone": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.FallbackMode(); ok {
 		if err := proxy.FallbackModeValidator(v); err != nil {
 			return &ValidationError{Name: "fallback_mode", err: fmt.Errorf(`ent: validator failed for field "Proxy.fallback_mode": %w`, err)}
@@ -467,6 +507,15 @@ func (_u *ProxyUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(proxy.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Timezone(); ok {
+		_spec.SetField(proxy.FieldTimezone, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.TimezoneDetection(); ok {
+		_spec.SetField(proxy.FieldTimezoneDetection, field.TypeJSON, value)
+	}
+	if _u.mutation.TimezoneDetectionCleared() {
+		_spec.ClearField(proxy.FieldTimezoneDetection, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.ExpiresAt(); ok {
 		_spec.SetField(proxy.FieldExpiresAt, field.TypeTime, value)
@@ -765,6 +814,40 @@ func (_u *ProxyUpdateOne) SetNillableStatus(v *string) *ProxyUpdateOne {
 	return _u
 }
 
+// SetTimezone sets the "timezone" field.
+func (_u *ProxyUpdateOne) SetTimezone(v string) *ProxyUpdateOne {
+	_u.mutation.SetTimezone(v)
+	return _u
+}
+
+// SetNillableTimezone sets the "timezone" field if the given value is not nil.
+func (_u *ProxyUpdateOne) SetNillableTimezone(v *string) *ProxyUpdateOne {
+	if v != nil {
+		_u.SetTimezone(*v)
+	}
+	return _u
+}
+
+// SetTimezoneDetection sets the "timezone_detection" field.
+func (_u *ProxyUpdateOne) SetTimezoneDetection(v domain.IPGeolocation) *ProxyUpdateOne {
+	_u.mutation.SetTimezoneDetection(v)
+	return _u
+}
+
+// SetNillableTimezoneDetection sets the "timezone_detection" field if the given value is not nil.
+func (_u *ProxyUpdateOne) SetNillableTimezoneDetection(v *domain.IPGeolocation) *ProxyUpdateOne {
+	if v != nil {
+		_u.SetTimezoneDetection(*v)
+	}
+	return _u
+}
+
+// ClearTimezoneDetection clears the value of the "timezone_detection" field.
+func (_u *ProxyUpdateOne) ClearTimezoneDetection() *ProxyUpdateOne {
+	_u.mutation.ClearTimezoneDetection()
+	return _u
+}
+
 // SetExpiresAt sets the "expires_at" field.
 func (_u *ProxyUpdateOne) SetExpiresAt(v time.Time) *ProxyUpdateOne {
 	_u.mutation.SetExpiresAt(v)
@@ -1015,6 +1098,11 @@ func (_u *ProxyUpdateOne) check() error {
 			return &ValidationError{Name: "status", err: fmt.Errorf(`ent: validator failed for field "Proxy.status": %w`, err)}
 		}
 	}
+	if v, ok := _u.mutation.Timezone(); ok {
+		if err := proxy.TimezoneValidator(v); err != nil {
+			return &ValidationError{Name: "timezone", err: fmt.Errorf(`ent: validator failed for field "Proxy.timezone": %w`, err)}
+		}
+	}
 	if v, ok := _u.mutation.FallbackMode(); ok {
 		if err := proxy.FallbackModeValidator(v); err != nil {
 			return &ValidationError{Name: "fallback_mode", err: fmt.Errorf(`ent: validator failed for field "Proxy.fallback_mode": %w`, err)}
@@ -1090,6 +1178,15 @@ func (_u *ProxyUpdateOne) sqlSave(ctx context.Context) (_node *Proxy, err error)
 	}
 	if value, ok := _u.mutation.Status(); ok {
 		_spec.SetField(proxy.FieldStatus, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.Timezone(); ok {
+		_spec.SetField(proxy.FieldTimezone, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.TimezoneDetection(); ok {
+		_spec.SetField(proxy.FieldTimezoneDetection, field.TypeJSON, value)
+	}
+	if _u.mutation.TimezoneDetectionCleared() {
+		_spec.ClearField(proxy.FieldTimezoneDetection, field.TypeJSON)
 	}
 	if value, ok := _u.mutation.ExpiresAt(); ok {
 		_spec.SetField(proxy.FieldExpiresAt, field.TypeTime, value)

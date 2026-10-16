@@ -552,6 +552,12 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 	}
 
 	turnStart := time.Now()
+	// 仅改写本次上游发送副本，入口保留的重放历史和换账号重试正文仍为客户端原文。
+	body, err = s.rewriteCodexEnvironmentTime(ctx, account, body, turnStart)
+	if err != nil {
+		return nil, err
+	}
+	payloadBytes = len(body)
 	rejectedFieldRetryState := newOpenAIResponsesRejectedFieldRetryState(body)
 	var resp *http.Response
 	for {

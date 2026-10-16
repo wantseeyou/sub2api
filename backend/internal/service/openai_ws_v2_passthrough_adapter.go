@@ -696,6 +696,12 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		firstClientMessage = liteFirstMessage
 	}
 	originalFirstClientMessage := firstClientMessage
+	// 透传首帧与后续 response.create 共用环境时间改写规则。
+	timeBody, timeErr := s.rewriteCodexEnvironmentTime(ctx, account, firstClientMessage, time.Now())
+	if timeErr != nil {
+		return timeErr
+	}
+	firstClientMessage = timeBody
 	if next, policyErr := applyOpenAIWSReasoningEffortPolicy(firstClientMessage, hooks); policyErr != nil {
 		return NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, policyErr.Error(), policyErr)
 	} else {
@@ -998,6 +1004,11 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			}
 			responsesLite := isResponseCreate && isOpenAIResponsesLiteWebSocketPayload(payload)
 			if isResponseCreate {
+				timeBody, timeErr := s.rewriteCodexEnvironmentTime(ctx, account, payload, responseCreateAt)
+				if timeErr != nil {
+					return payload, nil, timeErr
+				}
+				payload = timeBody
 				if normalized, compatibilityChanged, normalizeErr := normalizeOpenAIResponsesWebSocketCompatibilityBodyWithConfig(s.cfg, payload, account, responsesLite); normalizeErr != nil {
 					return payload, nil, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", normalizeErr)
 				} else if compatibilityChanged {

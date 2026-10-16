@@ -42,6 +42,26 @@ export default {
 
     // Proxies
     proxies: {
+      timezone: {
+        action: 'Set timezone',
+        title: 'Proxy timezone',
+        description: 'Detect the exit IP and location through this proxy. The city in a timezone name represents the timezone and need not match the IP city.',
+        current: 'Saved timezone',
+        unset: 'Not set',
+        detected: 'Proxy exit detection',
+        detecting: 'Detecting…',
+        refresh: 'Refresh detection',
+        select: 'Select timezone',
+        auto: 'Detect and save',
+        saved: 'Proxy timezone saved',
+        unsaved: 'This selection has not been saved.',
+        different: 'Differs from IP timezone',
+        mismatch: 'Timezone mismatch: the IP timezone is {detected}. You can still save this selection.',
+        detectedAt: 'Last successful detection: {time}',
+        noDetection: 'No successful detection yet.',
+        saveFailed: 'Failed to save. Refresh and try again.',
+        detectFailed: 'Detection failed. The previous timezone and detection were retained.',
+      },
       title: 'Proxy Management',
       description: 'Manage proxy servers for accounts',
       createProxy: 'Create Proxy',
@@ -85,6 +105,7 @@ export default {
         socks5h: 'SOCKS5H (Remote DNS)'
       },
       columns: {
+        timezone: 'Timezone',
         name: 'Name',
         protocol: 'Protocol',
         address: 'Address',

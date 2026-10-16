@@ -8,7 +8,8 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-const updateCacheKey = "update:latest"
+// 按发布源隔离缓存，避免切换仓库后继续展示原作者的版本信息。
+const updateCacheKey = "update:latest:wantseeyou/sub2api"
 
 type updateCache struct {
 	rdb *redis.Client

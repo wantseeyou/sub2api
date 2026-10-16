@@ -42,6 +42,26 @@ export default {
 
     // Proxies Management
     proxies: {
+      timezone: {
+        action: '设置时区',
+        title: '代理时区设置',
+        description: '通过此代理获取出口 IP 和地区。时区名称中的城市代表时区，不必与 IP 所在城市相同。',
+        current: '当前设置时区',
+        unset: '未设置',
+        detected: '代理出口检测',
+        detecting: '正在检测…',
+        refresh: '重新检测',
+        select: '选择时区',
+        auto: '自动获取并保存',
+        saved: '代理时区已保存',
+        unsaved: '当前选择尚未保存。',
+        different: '与 IP 检测时区不一致',
+        mismatch: '时区不一致：IP 检测为 {detected}，仍可保存当前选择。',
+        detectedAt: '上次成功检测：{time}',
+        noDetection: '尚无成功检测记录。',
+        saveFailed: '保存失败，请刷新后重试。',
+        detectFailed: '获取失败，已保留之前的时区与检测记录。',
+      },
       title: 'IP管理',
       description: '管理代理服务器配置',
       createProxy: '添加代理',
@@ -74,6 +94,7 @@ export default {
       dataExported: '数据导出成功',
       dataExportFailed: '数据导出失败',
       columns: {
+        timezone: '时区',
         name: '名称',
         protocol: '协议',
         address: '地址',

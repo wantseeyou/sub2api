@@ -15,13 +15,16 @@ import (
 
 // ProxyHandler handles admin proxy management
 type ProxyHandler struct {
-	adminService service.AdminService
+	adminService    service.AdminService
+	timezoneService service.ProxyTimezoneService // 代理地区和时区设置服务。
 }
 
 // NewProxyHandler creates a new admin proxy handler
 func NewProxyHandler(adminService service.AdminService) *ProxyHandler {
+	timezoneService, _ := adminService.(service.ProxyTimezoneService)
 	return &ProxyHandler{
-		adminService: adminService,
+		adminService:    adminService,
+		timezoneService: timezoneService,
 	}
 }
 
