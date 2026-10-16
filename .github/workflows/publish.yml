@@ -1,0 +1,118 @@
+name: Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号，例如 0.2.17 或 v0.2.17；留空读取 backend/cmd/server/VERSION'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: publish-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Resolve release version
+        id: version
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+          SIMPLE_RELEASE: ${{ vars.SIMPLE_RELEASE }}
+        run: |
+          if [[ "$SIMPLE_RELEASE" == true ]]; then
+            echo '::error::请先关闭仓库变量 SIMPLE_RELEASE，以便发布完整安装包。'
+            exit 1
+          fi
+          version="${REQUESTED_VERSION:-$(cat backend/cmd/server/VERSION)}"
+          version="${version#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo '::error::版本号必须为 X.Y.Z 或 vX.Y.Z，例如 v0.2.17。'
+            exit 1
+          fi
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Verify release tooling
+        run: |
+          python -m pip install -r .github/release-tools/requirements-release.txt
+          python -m unittest discover -s .github/release-tools -p test_release_matrix.py
+
+      - name: Check for an existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          url = f"https://api.github.com/repos/{os.environ['GITHUB_REPOSITORY']}/releases/tags/{os.environ['RELEASE_TAG']}"
+          request = urllib.request.Request(url, headers={
+              'Authorization': f"Bearer {os.environ['GH_TOKEN']}",
+              'Accept': 'application/vnd.github+json',
+              'User-Agent': 'Sub2API-Publisher',
+          })
+          try:
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  release = json.load(response)
+          except urllib.error.HTTPError as error:
+              if error.code != 404:
+                  raise SystemExit(f'::error::检查已有版本失败：GitHub HTTP {error.code}')
+          else:
+              if not release['draft']:
+                  raise SystemExit('::error::这个版本已经发布，请使用新版本号；已发布版本不会覆盖。')
+          PY
+
+      - name: Create or reuse the version tag
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          source_sha=$(git rev-parse HEAD)
+          if tag_sha=$(git rev-parse --verify "refs/tags/$RELEASE_TAG^{commit}" 2>/dev/null); then
+            if [[ "$tag_sha" != "$source_sha" ]]; then
+              echo '::error::同名标签已经指向其他提交，请使用新版本号；现有标签不会移动。'
+              exit 1
+            fi
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git tag -a "$RELEASE_TAG" -m "Release $RELEASE_TAG"
+            git push origin "refs/tags/$RELEASE_TAG"
+          fi
+
+      - name: Start the release build
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SOURCE_REF: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          # GITHUB_TOKEN 推送标签不会触发其他工作流，因此显式启动现有 Release。
+          gh workflow run release.yml --ref "$SOURCE_REF" \
+            --raw-field "tag=$RELEASE_TAG" \
+            --raw-field simple_release=false \
+            --raw-field dry_run=false
+          {
+            echo "已启动 $RELEASE_TAG 的完整编译发布。"
+            echo
+            echo "[查看 Release 构建进度](https://github.com/$GITHUB_REPOSITORY/actions/workflows/release.yml)"
+            echo
+            echo "[查看发布结果](https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG)"
+          } >> "$GITHUB_STEP_SUMMARY"
