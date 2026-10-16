@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -184,7 +185,11 @@ func requestGatewayTimezoneJSON(ctx context.Context, options httpclient.Options,
 	if err != nil {
 		return err
 	}
-	defer response.Body.Close()
+	defer func() {
+		if closeErr := response.Body.Close(); closeErr != nil {
+			log.Printf("[GatewayTimezone] close provider response: %v", closeErr)
+		}
+	}()
 	if response.StatusCode != http.StatusOK {
 		return fmt.Errorf("timezone provider returned HTTP %d", response.StatusCode)
 	}

@@ -116,7 +116,7 @@ func (s *OpenAIGatewayService) codexEnvironmentLocation(ctx context.Context, acc
 		return nil, nil
 	}
 	if timezone == "Local" {
-		return nil, fmt.Errorf("Codex environment timezone must be an IANA timezone")
+		return nil, fmt.Errorf("codex environment timezone must be an IANA timezone")
 	}
 	location, err := loadCodexEnvironmentLocation(timezone)
 	if err != nil {

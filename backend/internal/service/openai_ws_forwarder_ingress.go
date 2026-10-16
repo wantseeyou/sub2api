@@ -968,7 +968,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		if timeErr != nil {
 			return nil, timeErr
 		}
-		payloadBytes = len(upstreamPayload)
+		payloadBytes += len(upstreamPayload) - len(payload)
 		if err := lease.WriteJSONWithContextTimeout(ctx, json.RawMessage(upstreamPayload), s.openAIWSWriteTimeout()); err != nil {
 			return nil, wrapOpenAIWSIngressTurnError(
 				"write_upstream",
