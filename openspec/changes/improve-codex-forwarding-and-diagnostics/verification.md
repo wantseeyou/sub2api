@@ -75,6 +75,8 @@ go test ./internal/service -run 'Test(OpenAIGatewayService_ProxyResponsesWebSock
 
 本轮临时用例验证后已删除，不作为长期测试保留。三处 Go 文件格式检查及 `git diff --check HEAD` 通过；`.dev/start.sh --restart-backend` 完成后端构建和本地重启，前端 3000、后端 8081 健康检查通过。
 
+发布 `0.2.172` 前，包含前端资源的 `CGO_ENABLED=0 go build -tags=embed` 通过，二进制版本输出确认为 `0.2.172`。远端完整静态检查发现身份解析统一后遗留的未使用函数 `codexTurnMetadataThreadID`，已删除；线程和执行作用域相关测试通过（1.728s）。随后以 Go 1.27.2 运行 golangci-lint v2.14.0 完整检查 `./...`，结果为 `0 issues`，未使用差异过滤。
+
 ## 验证限制
 
 未使用真实账号、代理或插件运行线上探测，未测得线上首输出耗时、失败率或压缩收益。上线后可观察出站字节数、WS 连接建立次数、首输出时间与失败阶段；这些改动不保证减少输入 token 或提高缓存命中率。

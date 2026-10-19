@@ -58,11 +58,6 @@ func parseCodexTurnMetadata(raw string) (codexTurnMetadata, bool) {
 	return metadata, true
 }
 
-func codexTurnMetadataThreadID(raw string) string {
-	metadata, _ := parseCodexTurnMetadata(raw)
-	return metadata.ThreadID
-}
-
 // openAIWSExecutionTurnMetadata 取本次连接的 turn 元数据：x-codex-turn-metadata 头优先，
 // 其次请求体 client_metadata 内嵌的同名 JSON（Desktop 走 HTTP 时只有后者）。
 func openAIWSExecutionTurnMetadata(c *gin.Context, body []byte) codexTurnMetadata {
