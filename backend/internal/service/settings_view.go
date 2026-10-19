@@ -158,6 +158,7 @@ type SystemSettings struct {
 	HomeContent                 string
 	CompactHomeEnabled          bool
 	HideCcsImportButton         bool
+	UsageLeaderboardEnabled     bool // 是否展示用户用量排行榜
 	PurchaseSubscriptionEnabled bool
 	PurchaseSubscriptionURL     string
 	TableDefaultPageSize        int
@@ -360,6 +361,7 @@ type PublicSettings struct {
 	HomeContent                         string
 	CompactHomeEnabled                  bool
 	HideCcsImportButton                 bool
+	UsageLeaderboardEnabled             bool // 是否展示用户用量排行榜
 
 	PurchaseSubscriptionEnabled bool
 	PurchaseSubscriptionURL     string

@@ -728,6 +728,10 @@ export default {
         integrationDoc: 'Payment Integration Docs',
         integrationDocHint: 'Covers endpoint specs, idempotency semantics, and code samples'
       },
+      usageLeaderboard: {
+        title: 'Show Usage Leaderboard',
+        description: 'Allow regular users to view the site-wide usage leaderboard for regular users.',
+      },
       customMenu: {
         title: 'Custom Menu Pages',
         description: 'Add custom iframe pages to the sidebar navigation. Each page can be visible to regular users or administrators.',

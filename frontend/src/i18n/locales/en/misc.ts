@@ -1,4 +1,16 @@
 export default {
+  usageLeaderboard: {
+    title: 'Usage Leaderboard',
+    description: 'View usage rankings for all regular users. Click a column heading to change the ranking.',
+    period: 'Date range',
+    limit: 'Users shown',
+    today: 'Today',
+    yesterday: 'Yesterday',
+    last7Days: '7 days',
+    last30Days: '30 days',
+    timezone: 'Beijing time (UTC+8). The 7-day and 30-day ranges include today.',
+    loadError: 'Unable to load the leaderboard. Refresh to try again.',
+  },
 
   // Subscription Progress (Header component)
   subscriptionProgress: {

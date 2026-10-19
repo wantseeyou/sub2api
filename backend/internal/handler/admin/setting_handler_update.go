@@ -162,6 +162,7 @@ type UpdateSettingsRequest struct {
 	HomeContent                 string                `json:"home_content"`
 	CompactHomeEnabled          bool                  `json:"compact_home_enabled"`
 	HideCcsImportButton         bool                  `json:"hide_ccs_import_button"`
+	UsageLeaderboardEnabled     bool                  `json:"usage_leaderboard_enabled"` // 是否展示用户用量排行榜
 	PurchaseSubscriptionEnabled *bool                 `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL     *string               `json:"purchase_subscription_url"`
 	TableDefaultPageSize        int                   `json:"table_default_page_size"`
@@ -513,6 +514,10 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
+	}
+	// 省略排行榜开关时保留内存中的现值，使设置审计与未写入该字段的数据库行为一致。
+	if _, sent := sentFields[service.SettingKeyUsageLeaderboardEnabled]; !sent {
+		req.UsageLeaderboardEnabled = previousSettings.UsageLeaderboardEnabled
 	}
 
 	// 两个安全开关的请求字段为指针：省略字段=保持现值，避免旧客户端/脚本
@@ -1649,6 +1654,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		HomeContent:                            req.HomeContent,
 		CompactHomeEnabled:                     req.CompactHomeEnabled,
 		HideCcsImportButton:                    req.HideCcsImportButton,
+		UsageLeaderboardEnabled:                req.UsageLeaderboardEnabled,
 		PurchaseSubscriptionEnabled:            purchaseEnabled,
 		PurchaseSubscriptionURL:                purchaseURL,
 		TableDefaultPageSize:                   req.TableDefaultPageSize,
@@ -2313,6 +2319,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		HomeContent:                                            updatedSettings.HomeContent,
 		CompactHomeEnabled:                                     updatedSettings.CompactHomeEnabled,
 		HideCcsImportButton:                                    updatedSettings.HideCcsImportButton,
+		UsageLeaderboardEnabled:                                updatedSettings.UsageLeaderboardEnabled,
 		PurchaseSubscriptionEnabled:                            updatedSettings.PurchaseSubscriptionEnabled,
 		PurchaseSubscriptionURL:                                updatedSettings.PurchaseSubscriptionURL,
 		TableDefaultPageSize:                                   updatedSettings.TableDefaultPageSize,

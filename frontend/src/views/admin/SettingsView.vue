@@ -6955,6 +6955,20 @@
               </button>
             </div>
           </div>
+          <!-- Usage Leaderboard -->
+          <div class="card p-6">
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
+                  {{ t("admin.settings.usageLeaderboard.title") }}
+                </h2>
+                <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  {{ t("admin.settings.usageLeaderboard.description") }}
+                </p>
+              </div>
+              <Toggle v-model="form.usage_leaderboard_enabled" :aria-label="t('admin.settings.usageLeaderboard.title')" />
+            </div>
+          </div>
 	        </div>
 	        <!-- /Tab: General -->
 
@@ -9818,6 +9832,7 @@ const form = reactive<SettingsForm>({
   compact_home_enabled: false,
   backend_mode_enabled: false,
   hide_ccs_import_button: false,
+  usage_leaderboard_enabled: false,
   payment_enabled: false,
   risk_control_enabled: false,
   cyber_policy_user_allowlist: "",
@@ -11525,6 +11540,7 @@ async function saveSettings() {
       compact_home_enabled: form.compact_home_enabled,
       backend_mode_enabled: form.backend_mode_enabled,
       hide_ccs_import_button: form.hide_ccs_import_button,
+      usage_leaderboard_enabled: form.usage_leaderboard_enabled,
       table_default_page_size: form.table_default_page_size,
       table_page_size_options: form.table_page_size_options,
       custom_menu_items: form.custom_menu_items,

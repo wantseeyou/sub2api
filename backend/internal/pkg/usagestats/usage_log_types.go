@@ -168,6 +168,7 @@ type UserSpendingRankingResponse struct {
 type UserBreakdownItem struct {
 	UserID       int64   `json:"user_id"`
 	Email        string  `json:"email"`
+	Username     string  `json:"-"` // 用户昵称，供用户排行榜选择展示名称
 	Requests     int64   `json:"requests"`
 	InputTokens  int64   `json:"input_tokens"`  // 输入 token 累计
 	OutputTokens int64   `json:"output_tokens"` // 输出 token 累计
@@ -180,6 +181,7 @@ type UserBreakdownItem struct {
 
 // UserBreakdownDimension specifies the dimension to filter for user breakdown.
 type UserBreakdownDimension struct {
+	UserRole     string // 用户角色筛选，空值表示不限制角色
 	GroupID      int64  // filter by group_id (>0 to enable)
 	Model        string // filter by model name (non-empty to enable)
 	ModelType    string // "requested", "upstream", or "mapping"

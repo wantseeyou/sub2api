@@ -623,6 +623,7 @@ func (r *usageLogRepository) GetUserBreakdownStats(ctx context.Context, startTim
 		SELECT
 			COALESCE(ul.user_id, 0) as user_id,
 			COALESCE(u.email, '') as email,
+			COALESCE(u.username, '') as username,
 			COUNT(*) as requests,
 			COALESCE(SUM(ul.input_tokens), 0) as input_tokens,
 			COALESCE(SUM(ul.output_tokens), 0) as output_tokens,
@@ -637,6 +638,10 @@ func (r *usageLogRepository) GetUserBreakdownStats(ctx context.Context, startTim
 	`
 	args := []any{startTime, endTime}
 
+	if dim.UserRole != "" {
+		query += fmt.Sprintf(" AND u.role = $%d", len(args)+1)
+		args = append(args, dim.UserRole)
+	}
 	if dim.GroupID > 0 {
 		query += fmt.Sprintf(" AND ul.group_id = $%d", len(args)+1)
 		args = append(args, dim.GroupID)
@@ -683,7 +688,10 @@ func (r *usageLogRepository) GetUserBreakdownStats(ctx context.Context, startTim
 	case "total_tokens", "input_tokens", "output_tokens", "cache_tokens", "requests", "cost", "actual_cost":
 		orderBy = dim.SortBy
 	}
-	query += " GROUP BY ul.user_id, u.email ORDER BY " + orderBy + " DESC"
+	query += " GROUP BY ul.user_id, u.email, u.username ORDER BY " + orderBy + " DESC"
+	if dim.UserRole != "" {
+		query += ", ul.user_id ASC"
+	}
 	if limit > 0 {
 		query += fmt.Sprintf(" LIMIT %d", limit)
 	}
@@ -705,6 +713,7 @@ func (r *usageLogRepository) GetUserBreakdownStats(ctx context.Context, startTim
 		if err := rows.Scan(
 			&row.UserID,
 			&row.Email,
+			&row.Username,
 			&row.Requests,
 			&row.InputTokens,
 			&row.OutputTokens,

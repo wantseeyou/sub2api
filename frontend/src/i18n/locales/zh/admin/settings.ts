@@ -723,6 +723,10 @@ export default {
         integrationDoc: '支付集成文档',
         integrationDocHint: '包含接口说明、幂等语义及示例代码'
       },
+      usageLeaderboard: {
+        title: '展示排行榜',
+        description: '开启后，普通用户可以查看全站普通用户的用量排行榜。',
+      },
       customMenu: {
         title: '自定义菜单页面',
         description: '添加自定义 iframe 页面到侧边栏导航。每个页面可以设置为普通用户或管理员可见。',

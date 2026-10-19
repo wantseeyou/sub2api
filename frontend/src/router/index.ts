@@ -13,6 +13,7 @@ import { useRoutePrefetch } from '@/composables/useRoutePrefetch'
 import { getSetupStatus } from '@/api/setup'
 import { resolveCompletedSetupRedirectPath } from './setupRedirect'
 import { resolveRouteDocumentTitle } from './title'
+import { FeatureFlags, resolveFeatureFlag } from '@/utils/featureFlags'
 
 /**
  * Route definitions with lazy loading
@@ -250,6 +251,23 @@ const routes: RouteRecordRaw[] = [
       title: 'Redeem Code',
       titleKey: 'redeem.title',
       descriptionKey: 'redeem.description'
+    }
+  },
+  {
+    path: '/usage-leaderboard',
+    name: 'UsageLeaderboard',
+    component: () => import('@/views/user/UsageLeaderboardView.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Usage Leaderboard',
+      titleKey: 'usageLeaderboard.title',
+      descriptionKey: 'usageLeaderboard.description'
+    },
+    // 进入页面前核对普通用户身份和最新开关，阻止直接访问关闭的排行榜。
+    beforeEnter: async () => {
+      if (useAuthStore().isAdmin) return '/admin/dashboard'
+      const settings = await useAppStore().fetchPublicSettings(true)
+      return resolveFeatureFlag(settings, FeatureFlags.usageLeaderboard) || '/dashboard'
     }
   },
   {

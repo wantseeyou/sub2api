@@ -158,6 +158,7 @@ type SystemSettings struct {
 	HomeContent                 string           `json:"home_content"`
 	CompactHomeEnabled          bool             `json:"compact_home_enabled"`
 	HideCcsImportButton         bool             `json:"hide_ccs_import_button"`
+	UsageLeaderboardEnabled     bool             `json:"usage_leaderboard_enabled"` // 是否展示用户用量排行榜
 	PurchaseSubscriptionEnabled bool             `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL     string           `json:"purchase_subscription_url"`
 	TableDefaultPageSize        int              `json:"table_default_page_size"`
@@ -398,6 +399,7 @@ type PublicSettings struct {
 	HomeContent                         string                   `json:"home_content"`
 	CompactHomeEnabled                  bool                     `json:"compact_home_enabled"`
 	HideCcsImportButton                 bool                     `json:"hide_ccs_import_button"`
+	UsageLeaderboardEnabled             bool                     `json:"usage_leaderboard_enabled"` // 是否展示用户用量排行榜
 	PurchaseSubscriptionEnabled         bool                     `json:"purchase_subscription_enabled"`
 	PurchaseSubscriptionURL             string                   `json:"purchase_subscription_url"`
 	TableDefaultPageSize                int                      `json:"table_default_page_size"`

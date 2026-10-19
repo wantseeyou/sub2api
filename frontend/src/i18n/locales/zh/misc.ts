@@ -1,4 +1,16 @@
 export default {
+  usageLeaderboard: {
+    title: '用量排行榜',
+    description: '查看全站普通用户的用量排名，点击表头切换排序。',
+    period: '日期',
+    limit: '展示人数',
+    today: '今日',
+    yesterday: '昨天',
+    last7Days: '7 天',
+    last30Days: '30 天',
+    timezone: '北京时间（UTC+8），7 天和 30 天均包含今天。',
+    loadError: '排行榜加载失败，请点击刷新重试。',
+  },
 
   // Subscription Progress (Header component)
   subscriptionProgress: {
