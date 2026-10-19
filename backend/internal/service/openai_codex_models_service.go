@@ -1690,9 +1690,9 @@ func (c *openAIModelsCache) set(key string, manifest *OpenAIModelsResponse, now 
 // FetchCodexModelsManifest fetches the live Codex models manifest from either
 // the ChatGPT backend for OAuth accounts or a custom upstream for API key accounts.
 //
-// After validating the stable top-level envelope, OAuth response bodies are
-// passed through verbatim. Custom API key manifests receive only the narrowly
-// scoped compatibility adjustments required by custom-provider Codex clients.
+// OAuth manifests advertise the text web search supported by the Codex upstream.
+// Custom API key manifests receive the compatibility adjustments required by
+// custom-provider Codex clients.
 func (s *OpenAIGatewayService) FetchCodexModelsManifest(ctx context.Context, account *Account, clientVersion, ifNoneMatch string) (*OpenAIModelsResponse, error) {
 	if account == nil {
 		return nil, infraerrors.New(http.StatusInternalServerError, "OPENAI_CODEX_MODELS_ACCOUNT_REQUIRED", "account is required")
@@ -2054,6 +2054,10 @@ func (s *OpenAIGatewayService) fetchCodexModelsManifestUpstream(ctx context.Cont
 			}
 		}
 	}
+	body, err = normalizeOpenAIOAuthWebSearchManifest(request.credentialAccount, body)
+	if err != nil {
+		return nil, err
+	}
 	etag := response.upstreamETag
 	manifest := &OpenAIModelsResponse{
 		Body:                         body,
@@ -2062,7 +2066,7 @@ func (s *OpenAIGatewayService) fetchCodexModelsManifestUpstream(ctx context.Cont
 		upstreamSourceBody:           append([]byte(nil), upstreamBody...),
 		convertedFromOpenAIModelList: convertedFromOpenAIModelList,
 	}
-	if request.useAPIKeyUpstream && !bytes.Equal(body, upstreamBody) {
+	if !bytes.Equal(body, upstreamBody) {
 		manifest.ETag = codexModelsManifestBodyETag(body)
 	}
 	return manifest, nil

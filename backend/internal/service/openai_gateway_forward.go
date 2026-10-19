@@ -19,6 +19,18 @@ import (
 
 // Forward forwards request to OpenAI API
 func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (result *OpenAIForwardResult, resultErr error) {
+	// 规范化后超限时，回到原始请求按 HTTP 规则重新构造一次；此信号只在拨号和写入前产生。
+	routingBody := body
+	defer func() {
+		if errors.Is(resultErr, errOpenAIWSSizeRequiresHTTP) && !c.GetBool(openAIWSSizeRouteHTTPKey) && !OpenAIForwardAttemptLocked(c) && !c.Writer.Written() {
+			if !openAIWSCanBridgePayload(routingBody) {
+				result, resultErr = nil, rejectOpenAIWSOversizedRequest(c)
+				return
+			}
+			c.Set(openAIWSSizeRouteHTTPKey, true)
+			result, resultErr = s.Forward(ctx, c, account, routingBody)
+		}
+	}()
 	fpIDs := resolveCodexFingerprintIDsForRequest(c, account, body)
 	stageCodexFingerprintIDs(c, nil)
 	if err := s.guardCodexIdentityContinuation(c, account, body); err != nil {
@@ -75,6 +87,15 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		return nil, timeErr
 	}
 	body = timeBody
+	searchBody, searchChanged, searchErr := normalizeOpenAIOAuthWebSearchContentTypes(account, body)
+	if searchErr != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "code": "unsupported_web_search_content_type", "message": searchErr.Error()}})
+		return nil, searchErr
+	}
+	if searchChanged {
+		body = searchBody
+		logger.LegacyPrintf("service.openai_gateway", "[OpenAI] web_search_content_types_normalized account_id=%d content_types=text", account.ID)
+	}
 
 	normalizedBody, normalized, err := normalizeOpenAICodexCompactReasoningEffortForAccount(c, account, body)
 	if err != nil {
@@ -126,9 +147,9 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			body = liteBody
 		}
 	}
-	wsDecision := s.resolveOpenAIForwardTransport(c, account)
-	if GetOpenAIClientTransport(c) != OpenAIClientTransportWS && gjson.GetBytes(body, "background").Bool() {
-		wsDecision = openAIWSHTTPDecision("background_requires_http")
+	wsDecision, decisionErr := s.resolveOpenAIForwardTransportForBody(c, account, body)
+	if decisionErr != nil {
+		return nil, decisionErr
 	}
 	passthroughEnabled := account.IsOpenAIPassthroughEnabled()
 	compactPath := isOpenAIResponsesCompactPath(c)
@@ -987,6 +1008,9 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 				wsResult.BillingModel = imageBillingModel
 			}
 			return wsResult, nil
+		}
+		if errors.Is(wsErr, errOpenAIWSSizeRequiresHTTP) {
+			return nil, wsErr
 		}
 		s.writeOpenAIWSFallbackErrorResponse(c, account, wsErr)
 		return nil, wsErr

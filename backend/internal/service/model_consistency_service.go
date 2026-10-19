@@ -426,7 +426,8 @@ func (s *ModelConsistencyService) evaluate(ctx context.Context, account *Account
 			return
 		}
 		result.SampleCount++
-		output, usage, reason := s.sample(ctx, account, result.UpstreamModel, challenge, result.Transport)
+		output, usage, upstreamStatus, reason := s.sample(ctx, account, result.UpstreamModel, challenge, result.Transport)
+		result.UpstreamStatusCode = upstreamStatus
 		if usage != nil {
 			if result.Usage == nil {
 				result.Usage = &ModelConsistencyUsage{}

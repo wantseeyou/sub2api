@@ -26,6 +26,9 @@ const (
 )
 
 const openAIWSHTTPBridgeToolStateContextKey = "openai_ws_http_bridge_tool_state"
+const openAIWSSizeRouteHTTPKey = "openai_ws_size_route_http"
+
+var errOpenAIWSSizeRequiresHTTP = errors.New("normalized websocket payload requires HTTP transport")
 
 type openAIWSHTTPBridgeToolState struct {
 	ClientMapping apicompat.ResponsesClientToolMapping
@@ -103,6 +106,49 @@ func (s *OpenAIGatewayService) openAIWSHTTPBridgeThresholdBytes() int64 {
 	return s.cfg.Gateway.OpenAIWS.HTTPBridgeThresholdBytes
 }
 
+// resolveOpenAIForwardTransportForBody 在发送前按请求大小选择传输，续链请求不得跨协议丢失上下文。
+func (s *OpenAIGatewayService) resolveOpenAIForwardTransportForBody(c *gin.Context, account *Account, body []byte) (OpenAIWSProtocolDecision, error) {
+	decision := s.resolveOpenAIForwardTransport(c, account)
+	if GetOpenAIClientTransport(c) != OpenAIClientTransportWS && gjson.GetBytes(body, "background").Bool() {
+		return openAIWSHTTPDecision("background_requires_http"), nil
+	}
+	if decision.Transport != OpenAIUpstreamTransportResponsesWebsocketV2 {
+		return decision, nil
+	}
+	if c.GetBool(openAIWSSizeRouteHTTPKey) {
+		return openAIWSHTTPDecision("payload_too_large"), nil
+	}
+	if !s.openAIWSPayloadTooLarge(len(body)) {
+		return decision, nil
+	}
+	// 与原生桥接共用严格扫描，重复或非法锚点字段也不能被当成无续链请求。
+	if !s.shouldBridgeOpenAIWSPassthroughFirstMessage(account, body) {
+		return decision, rejectOpenAIWSOversizedRequest(c)
+	}
+	logOpenAIWSModeInfo("payload_route_http account_id=%d payload_bytes=%d threshold_bytes=%d reason=payload_too_large", account.ID, len(body), s.openAIWSHTTPBridgeThresholdBytes())
+	c.Set(openAIWSSizeRouteHTTPKey, true)
+	return openAIWSHTTPDecision("payload_too_large"), nil
+}
+
+// openAIWSPayloadTooLarge 复用桥接阈值保护最终发送帧，关闭桥接时保留既有传输行为。
+func (s *OpenAIGatewayService) openAIWSPayloadTooLarge(payloadBytes int) bool {
+	return s.openAIWSHTTPBridgeEnabled() && int64(payloadBytes) >= s.openAIWSHTTPBridgeThresholdBytes()
+}
+
+// rejectOpenAIWSOversizedRequest 在尚未发送上游请求时返回可操作的大小错误。
+func rejectOpenAIWSOversizedRequest(c *gin.Context) error {
+	err := errors.New("WebSocket request exceeds the payload limit; send the complete context over HTTP without previous_response_id, or reduce the request size")
+	c.JSON(http.StatusRequestEntityTooLarge, gin.H{"error": gin.H{"type": "invalid_request_error", "code": "ws_payload_too_large", "message": err.Error()}})
+	return err
+}
+
+// rejectOpenAIWSContinuationRequest 提示客户端用完整上下文重建无法继续复用的连接本地续链。
+func rejectOpenAIWSContinuationRequest(c *gin.Context) error {
+	err := errors.New("WebSocket continuation connection is unavailable or nearing its lifetime limit; resend the complete context without previous_response_id")
+	c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "code": "ws_continuation_unavailable", "message": err.Error()}})
+	return err
+}
+
 func (s *OpenAIGatewayService) shouldBridgeOpenAIWSHTTP(account *Account, payloadBytes int, previousResponseID string) bool {
 	if account != nil && account.Platform == PlatformGrok {
 		return true
@@ -124,6 +170,11 @@ func (s *OpenAIGatewayService) shouldBridgeOpenAIWSPassthroughFirstMessage(accou
 	if !s.openAIWSHTTPBridgeEnabled() || int64(len(payload)) < s.openAIWSHTTPBridgeThresholdBytes() {
 		return false
 	}
+	return openAIWSCanBridgePayload(payload)
+}
+
+// openAIWSCanBridgePayload 严格检查帧类型和续链字段，避免切换 HTTP 时丢失上下文。
+func openAIWSCanBridgePayload(payload []byte) bool {
 	if !json.Valid(payload) {
 		return false
 	}

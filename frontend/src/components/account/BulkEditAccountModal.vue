@@ -886,6 +886,52 @@
         </div>
       </div>
 
+      <!-- OpenAI OAuth/SetupToken HTTP 转 WS -->
+      <div v-if="allOpenAIOAuth" class="border-t border-gray-200 pt-4 dark:border-dark-600">
+        <div class="mb-3 flex items-center justify-between">
+          <label
+            id="bulk-edit-openai-http-to-ws-label"
+            class="input-label mb-0"
+            for="bulk-edit-openai-http-to-ws-enabled"
+          >
+            {{ t('admin.accounts.openai.httpToWs') }}
+          </label>
+          <input
+            v-model="enableOpenAIHTTPToWS"
+            id="bulk-edit-openai-http-to-ws-enabled"
+            type="checkbox"
+            aria-controls="bulk-edit-openai-http-to-ws-body"
+            class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+          />
+        </div>
+        <div
+          id="bulk-edit-openai-http-to-ws-body"
+          :class="!enableOpenAIHTTPToWS && 'opacity-50'"
+        >
+          <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
+            {{ t('admin.accounts.openai.httpToWsDesc') }}
+          </p>
+          <button
+            id="bulk-edit-openai-http-to-ws-toggle"
+            type="button"
+            role="switch"
+            :aria-checked="openaiHttpToWsEnabled"
+            aria-labelledby="bulk-edit-openai-http-to-ws-label"
+            :disabled="!enableOpenAIHTTPToWS"
+            :class="[
+              'relative inline-flex h-6 w-11 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:cursor-not-allowed',
+              openaiHttpToWsEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+            ]"
+            @click="openaiHttpToWsEnabled = !openaiHttpToWsEnabled"
+          >
+            <span :class="[
+              'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200',
+              openaiHttpToWsEnabled ? 'translate-x-5' : 'translate-x-0'
+            ]" />
+          </button>
+        </div>
+      </div>
+
       <!-- OpenAI OAuth Codex CLI only -->
       <div v-if="allOpenAIOAuth" class="border-t border-gray-200 pt-4 dark:border-dark-600">
         <div class="mb-3 flex items-center justify-between">
@@ -1664,6 +1710,7 @@ const enableOpenAILongContextBilling = ref(false)
 const enableOpenAIEndpointCapabilities = ref(false)
 const enableOpenAIResponsesMode = ref(false)
 const enableOpenAIWSMode = ref(false)
+const enableOpenAIHTTPToWS = ref(false)
 const enableOpenAIAPIKeyWSMode = ref(false)
 const enableUpstreamBillingAutoProbe = ref(false)
 const enableCodexCLIOnly = ref(false)
@@ -1703,6 +1750,7 @@ const openAIEndpointCapabilities = ref<OpenAIEndpointCapability[]>([
 ])
 const openAIResponsesMode = ref<OpenAIResponsesMode>('auto')
 const openaiOAuthResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
+const openaiHttpToWsEnabled = ref(false)
 const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
 const upstreamBillingAutoProbeMode = ref<'enabled' | 'disabled'>('enabled')
 const codexCLIOnlyEnabled = ref(false)
@@ -1922,6 +1970,7 @@ const buildOpenAICompactModelMapping = (): Record<string, string> | null => {
   return buildModelMappingPayload('mapping', [], openAICompactModelMappings.value)
 }
 
+// 仅将明确勾选且适用于当前目标的字段写入批量更新。
 const buildUpdatePayload = (): Record<string, unknown> | null => {
   const updates: Record<string, unknown> = {}
   const credentials: Record<string, unknown> = {}
@@ -2060,6 +2109,10 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
     extra.openai_oauth_responses_websockets_v2_enabled = isOpenAIWSModeEnabled(
       openaiOAuthResponsesWebSocketV2Mode.value
     )
+  }
+
+  if (enableOpenAIHTTPToWS.value && allOpenAIOAuth.value) {
+    ensureExtra().openai_http_to_ws_enabled = openaiHttpToWsEnabled.value
   }
 
   if (enableOpenAIAPIKeyWSMode.value) {
@@ -2220,6 +2273,7 @@ const handleSubmit = async () => {
     enableStatus.value ||
     enableGroups.value ||
     enableOpenAIWSMode.value ||
+    (enableOpenAIHTTPToWS.value && allOpenAIOAuth.value) ||
     enableOpenAIAPIKeyWSMode.value ||
     enableUpstreamBillingAutoProbe.value ||
     enableCodexCLIOnly.value ||
@@ -2371,6 +2425,7 @@ watch(
       enableOpenAIEndpointCapabilities.value = false
       enableOpenAIResponsesMode.value = false
       enableOpenAIWSMode.value = false
+      enableOpenAIHTTPToWS.value = false
       enableOpenAIAPIKeyWSMode.value = false
       enableUpstreamBillingAutoProbe.value = false
       enableCodexCLIOnly.value = false
@@ -2404,6 +2459,7 @@ watch(
       status.value = 'active'
       groupIds.value = []
       openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
+      openaiHttpToWsEnabled.value = false
       openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
       upstreamBillingAutoProbeMode.value = 'enabled'
       codexCLIOnlyEnabled.value = false

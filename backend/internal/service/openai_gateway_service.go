@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"math/rand"
 	"net/http"
@@ -801,6 +802,7 @@ func classifyOpenAIWSReconnectReason(err error) (string, bool) {
 		"event_error",
 		"error_event",
 		"upstream_error_event",
+		openAIWSIncrementalAnchorMissing,
 		"ws_connection_limit_reached",
 		"missing_final_response":
 		return reason, true
@@ -902,15 +904,33 @@ func resolveOpenAIWSFallbackErrorResponse(err error) (statusCode int, errType st
 	return statusCode, errType, clientMessage, upstreamMessage, true
 }
 
+// writeOpenAIWSFallbackErrorResponse 保持客户端错误语义，并保留管理员可见的安全失败诊断。
 func (s *OpenAIGatewayService) writeOpenAIWSFallbackErrorResponse(c *gin.Context, account *Account, wsErr error) bool {
-	if c == nil || c.Writer == nil || c.Writer.Written() {
+	if c == nil || c.Writer == nil {
 		return false
 	}
 	statusCode, errType, clientMessage, upstreamMessage, ok := resolveOpenAIWSFallbackErrorResponse(wsErr)
+	upstreamStatusCode := 0
+	var dialErr *openAIWSDialError
+	if errors.As(wsErr, &dialErr) && dialErr != nil {
+		upstreamStatusCode = dialErr.StatusCode
+	}
+	failureStage := c.GetString(openAIWSExecutionStageKey)
+	failureReason, _ := classifyOpenAIWSReconnectReason(wsErr)
 	if OpenAIForwardAttemptLocked(c) {
 		statusCode, errType, ok = http.StatusBadGateway, "upstream_execution_unknown", true
 		clientMessage = "Upstream WebSocket execution could not be completed; the request was not replayed"
-		upstreamMessage = clientMessage
+		cause := classifyOpenAIWSDialError(wsErr)
+		if cause == "dial_error" {
+			cause = "transport_error"
+		}
+		if errors.Is(wsErr, io.EOF) || errors.Is(wsErr, io.ErrUnexpectedEOF) {
+			cause = "unexpected_eof"
+		}
+		closeStatus, _ := summarizeOpenAIWSReadCloseError(wsErr)
+		upstreamMessage = fmt.Sprintf("WebSocket execution incomplete: stage=%s reason=%s cause=%s close_status=%s; request was not replayed", failureStage, failureReason, cause, closeStatus)
+		// 未收到真实上游状态时，不把网关合成的 502 或此前尝试的状态记为上游状态。
+		c.Set(OpsUpstreamStatusCodeKey, upstreamStatusCode)
 	}
 	if !ok {
 		return false
@@ -922,7 +942,7 @@ func (s *OpenAIGatewayService) writeOpenAIWSFallbackErrorResponse(c *gin.Context
 		upstreamMessage = clientMessage
 	}
 
-	setOpsUpstreamError(c, statusCode, upstreamMessage, "")
+	setOpsUpstreamError(c, upstreamStatusCode, upstreamMessage, "")
 	if account != nil {
 		proxyID, proxyName := opsUpstreamWSProxyAttribution(account)
 		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -931,10 +951,16 @@ func (s *OpenAIGatewayService) writeOpenAIWSFallbackErrorResponse(c *gin.Context
 			Platform:           account.Platform,
 			AccountID:          account.ID,
 			AccountName:        account.Name,
-			UpstreamStatusCode: statusCode,
+			UpstreamStatusCode: upstreamStatusCode,
 			Kind:               "ws_error",
+			Stage:              failureStage,
+			Scope:              "inference",
+			Reason:             failureReason,
 			Message:            upstreamMessage,
 		})
+	}
+	if c.Writer.Written() {
+		return false
 	}
 	c.JSON(statusCode, gin.H{
 		"error": gin.H{

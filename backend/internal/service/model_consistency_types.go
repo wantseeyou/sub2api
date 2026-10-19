@@ -52,6 +52,8 @@ type ModelConsistencyResult struct {
 	Versions         ModelConsistencyVersions `json:"versions"`                   // 固定版本组合。
 	Usage            *ModelConsistencyUsage   `json:"usage,omitempty"`            // 可取得的上游实际用量。
 	Limitation       string                   `json:"limitation,omitempty"`       // 经验判断的可比性限制。
+
+	UpstreamStatusCode int `json:"upstream_status_code,omitempty"` // 上游 HTTP 请求或 WS 握手失败的状态码。
 }
 
 // ModelConsistencySnapshot 保存服务端托管结果及条件更新所需的配置摘要。

@@ -353,9 +353,9 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		c.Set("openai_passthrough", true)
 	}
 
-	decision := s.resolveOpenAIForwardTransport(c, account)
-	if gjson.GetBytes(body, "background").Bool() {
-		decision = openAIWSHTTPDecision("background_requires_http")
+	decision, decisionErr := s.resolveOpenAIForwardTransportForBody(c, account, body)
+	if decisionErr != nil {
+		return nil, decisionErr
 	}
 	c.Set("openai_ws_transport_decision", string(decision.Transport))
 	c.Set("openai_ws_transport_reason", decision.Reason)
@@ -384,6 +384,9 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 			}
 		}
 		if wsErr != nil {
+			if errors.Is(wsErr, errOpenAIWSSizeRequiresHTTP) {
+				return nil, wsErr
+			}
 			s.writeOpenAIWSFallbackErrorResponse(c, account, wsErr)
 			return result, wsErr
 		}

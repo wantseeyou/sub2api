@@ -17,6 +17,7 @@ import (
 )
 
 const modelConsistencyResponseLimit = 2 << 20
+const modelConsistencyErrorBodyLimit = 8 << 10
 
 // diagnosticToken 仅读取可用凭据，不进入刷新、停调或错误标记路径。
 func (s *ModelConsistencyService) diagnosticToken(ctx context.Context, account *Account) string {
@@ -45,26 +46,26 @@ func (s *ModelConsistencyService) diagnosticToken(ctx context.Context, account *
 }
 
 // sample 为单份样本取得账号并发名额，使用独立身份和可取消的专用传输。
-func (s *ModelConsistencyService) sample(parent context.Context, account *Account, model string, challenge modeltrace.ModelTraceChallenge, transport string) (string, *ModelConsistencyUsage, string) {
+func (s *ModelConsistencyService) sample(parent context.Context, account *Account, model string, challenge modeltrace.ModelTraceChallenge, transport string) (string, *ModelConsistencyUsage, int, string) {
 	ctx, cancel := context.WithTimeout(parent, modelConsistencySampleTimeout)
 	defer cancel()
 	slot, err := s.concurrency.AcquireAccountSlot(ctx, account.ID, account.Concurrency)
 	if err != nil || slot == nil || !slot.Acquired {
-		return "", nil, "account_busy"
+		return "", nil, 0, "account_busy"
 	}
 	defer slot.ReleaseFunc()
 	token := s.diagnosticToken(ctx, account)
 	if token == "" {
-		return "", nil, "credentials_unavailable"
+		return "", nil, 0, "credentials_unavailable"
 	}
 	proxyURL := ""
 	if account.ProxyID != nil {
 		if account.Proxy == nil || !account.Proxy.IsActive() || account.Proxy.IsExpired(time.Now()) {
-			return "", nil, "proxy_unavailable"
+			return "", nil, 0, "proxy_unavailable"
 		}
 		proxyURL = account.Proxy.URL()
 		if proxyURL == "" {
-			return "", nil, "proxy_unavailable"
+			return "", nil, 0, "proxy_unavailable"
 		}
 	}
 	c := modelConsistencyContext(ctx)
@@ -72,7 +73,7 @@ func (s *ModelConsistencyService) sample(parent context.Context, account *Accoun
 	metadata := map[string]any{"thread_id": thread, "turn_id": turn, "turn_started_at_unix_ms": time.Now().UnixMilli(), "session_id": thread, "window_id": thread + ":0"}
 	metadataJSON, err := marshalCodexTurnMetadata(metadata)
 	if err != nil {
-		return "", nil, "invalid_request"
+		return "", nil, 0, "invalid_request"
 	}
 	for _, header := range []string{"session-id", "session_id", "thread-id", "x-client-request-id", "conversation_id"} {
 		c.Request.Header.Set(header, thread)
@@ -100,11 +101,11 @@ func (s *ModelConsistencyService) sample(parent context.Context, account *Accoun
 	if transport == "websocket" {
 		decision := s.gateway.resolveOpenAIForwardTransport(c, account)
 		if decision.Transport != OpenAIUpstreamTransportResponsesWebsocketV2 {
-			return "", nil, "configuration_changed"
+			return "", nil, 0, "configuration_changed"
 		}
 		headers, _, err := s.gateway.buildOpenAIWSHeaders(ctx, c, account, token, decision, true, "", string(metadataJSON), cacheKey, model, "")
 		if err != nil {
-			return "", nil, "invalid_request"
+			return "", nil, 0, "invalid_request"
 		}
 		headers.Del(openAIWSTurnStateHeader)
 		headers.Set("conversation_id", thread)
@@ -112,14 +113,25 @@ func (s *ModelConsistencyService) sample(parent context.Context, account *Accoun
 		setOpenAIWSTurnMetadata(body, headers.Get(openAIWSTurnMetadataHeader))
 		wsURL, err := s.gateway.buildOpenAIResponsesWSURL(account)
 		if err != nil {
-			return "", nil, "invalid_request"
+			return "", nil, 0, "invalid_request"
 		}
-		conn, _, _, err := s.gateway.getOpenAIWSPassthroughDialer().Dial(ctx, wsURL, headers, proxyURL)
+		conn, status, _, err := s.gateway.getOpenAIWSPassthroughDialer().Dial(ctx, wsURL, headers, proxyURL)
 		if err != nil {
-			return "", nil, modelConsistencyTransportReason(ctx)
+			if status >= http.StatusBadRequest {
+				var body []byte
+				var handshakeErr *openAIWSHandshakeError
+				if errors.As(err, &handshakeErr) && handshakeErr != nil {
+					body = handshakeErr.Body
+				}
+				return "", nil, status, modelConsistencyHTTPFailureReason(status, body)
+			}
+			if status > 0 {
+				return "", nil, status, "websocket_handshake_rejected"
+			}
+			return "", nil, 0, modelConsistencyTransportReason(ctx)
 		}
 		if conn == nil {
-			return "", nil, "transport_error"
+			return "", nil, 0, "transport_error"
 		}
 		defer func() {
 			if closer, ok := conn.(openAIWSForceCloser); ok {
@@ -129,36 +141,72 @@ func (s *ModelConsistencyService) sample(parent context.Context, account *Accoun
 			}
 		}()
 		if err := conn.WriteJSON(ctx, s.gateway.buildOpenAIWSCreatePayload(body, account)); err != nil {
-			return "", nil, modelConsistencyTransportReason(ctx)
+			return "", nil, 0, modelConsistencyTransportReason(ctx)
 		}
-		return readModelConsistencyWebSocket(ctx, conn)
+		output, usage, reason := readModelConsistencyWebSocket(ctx, conn)
+		return output, usage, 0, reason
 	}
 	encoded, err := json.Marshal(body)
 	if err != nil {
-		return "", nil, "invalid_request"
+		return "", nil, 0, "invalid_request"
 	}
 	request, err := s.gateway.buildUpstreamRequest(ctx, c, account, encoded, token, true, cacheKey, true)
 	if err != nil {
-		return "", nil, "invalid_request"
+		return "", nil, 0, "invalid_request"
 	}
 	request.Header.Del(openAIWSTurnStateHeader)
 	request.Header.Del("Cookie")
 	request.Header.Set("conversation_id", thread)
 	response, err := s.gateway.doOpenAIUpstream(request, proxyURL, account)
 	if err != nil {
-		return "", nil, modelConsistencyTransportReason(ctx)
+		return "", nil, 0, modelConsistencyTransportReason(ctx)
 	}
 	if response == nil || response.Body == nil {
-		return "", nil, "invalid_response"
+		return "", nil, 0, "invalid_response"
 	}
 	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
-		return "", nil, "upstream_http_error"
+		body, err := io.ReadAll(io.LimitReader(response.Body, modelConsistencyErrorBodyLimit))
+		if err != nil {
+			return "", nil, response.StatusCode, modelConsistencyHTTPFailureReason(response.StatusCode, nil)
+		}
+		return "", nil, response.StatusCode, modelConsistencyHTTPFailureReason(response.StatusCode, body)
 	}
 	if !strings.Contains(strings.ToLower(response.Header.Get("Content-Type")), "text/event-stream") {
-		return "", nil, "invalid_response"
+		return "", nil, 0, "invalid_response"
 	}
-	return readModelConsistencySSE(ctx, response.Body)
+	output, usage, reason := readModelConsistencySSE(ctx, response.Body)
+	return output, usage, 0, reason
+}
+
+// modelConsistencyHTTPFailureReason 仅输出固定错误分类，不保存或回显上游错误正文。
+func modelConsistencyHTTPFailureReason(status int, body []byte) string {
+	switch status {
+	case http.StatusBadRequest, http.StatusUnprocessableEntity:
+		if json.Valid(body) {
+			if isOpenAIInstructionsRequiredError(status, "", body) {
+				return "upstream_instructions_rejected"
+			}
+			switch gjson.GetBytes(body, "error.code").String() {
+			case "model_not_found", "model_not_supported", "unsupported_model":
+				return "upstream_model_unavailable"
+			}
+		}
+		return "upstream_request_rejected"
+	case http.StatusUnauthorized:
+		return "upstream_authentication_failed"
+	case http.StatusForbidden:
+		return "upstream_access_denied"
+	case http.StatusNotFound:
+		return "upstream_model_unavailable"
+	case http.StatusTooManyRequests:
+		return "upstream_rate_limited"
+	default:
+		if status >= http.StatusInternalServerError && status <= 599 {
+			return "upstream_service_unavailable"
+		}
+		return "upstream_http_error"
+	}
 }
 
 // modelConsistencyTransportReason 将传输错误转换为不含上游正文的稳定原因码。
@@ -242,7 +290,7 @@ func parseModelConsistencyEvent(data []byte) (string, *ModelConsistencyUsage, bo
 	typeName := event.Get("type").String()
 	switch typeName {
 	case "response.failed", "error":
-		return "", nil, true, "response_failed"
+		return "", nil, true, modelConsistencyEventFailureReason(event)
 	case "response.incomplete":
 		return "", nil, true, "response_incomplete"
 	case "response.output_item.added", "response.output_item.done":
@@ -288,4 +336,25 @@ func parseModelConsistencyEvent(data []byte) (string, *ModelConsistencyUsage, bo
 		return "", nil, true, "invalid_response"
 	}
 	return "", nil, false, ""
+}
+
+// modelConsistencyEventFailureReason 仅将已知上游错误码归类，不保存错误正文或推测 HTTP 状态。
+func modelConsistencyEventFailureReason(event gjson.Result) string {
+	for _, path := range []string{"error.code", "response.error.code", "error.type", "response.error.type"} {
+		switch strings.ToLower(strings.TrimSpace(event.Get(path).String())) {
+		case "server_is_overloaded", "slow_down", "server_error", "service_unavailable", "service_unavailable_error", "service_unavailable_err":
+			return "upstream_service_unavailable"
+		case "rate_limit_exceeded", "rate_limit_error", "insufficient_quota", "usage_limit_reached":
+			return "upstream_rate_limited"
+		case "invalid_api_key", "token_expired", "invalid_token", "authentication_error":
+			return "upstream_authentication_failed"
+		case "permission_denied", "permission_error", "access_denied":
+			return "upstream_access_denied"
+		case "model_not_found", "model_not_supported", "unsupported_model":
+			return "upstream_model_unavailable"
+		case "invalid_request_error", "invalid_request", "unsupported_parameter", "invalid_value":
+			return "upstream_request_rejected"
+		}
+	}
+	return "response_failed"
 }

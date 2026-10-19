@@ -18,7 +18,8 @@ import (
 )
 
 const (
-	openAIWSConnMaxAge          = 60 * time.Minute
+	// 为上游 60 分钟硬限制预留 5 分钟；仅在租借或回合边界轮换，不中断执行。
+	openAIWSConnMaxAge          = 55 * time.Minute
 	openAIWSConnHealthCheckIdle = 90 * time.Second
 	// 仅对没有常驻读循环的连接实现生效：这类连接空闲时无人应答上游 ping，须在
 	// 上游保活窗口到期前回收。coder/websocket 连接由池常驻读循环应答 ping，不受此阈值约束。
@@ -160,6 +161,11 @@ func (l *openAIWSConnLease) AgeBefore() time.Duration {
 	return l.ageBefore
 }
 
+// NeedsRotation 判断连接是否已进入轮换窗口，长会话按当前年龄而非借出时年龄计算。
+func (l *openAIWSConnLease) NeedsRotation() bool {
+	return l != nil && l.conn != nil && l.conn.age(time.Now()) >= openAIWSConnMaxAge
+}
+
 func (l *openAIWSConnLease) UpstreamPingCount() int64 {
 	if l == nil || l.conn == nil {
 		return 0
@@ -291,8 +297,9 @@ type openAIWSConn struct {
 	closedCh  chan struct{}
 	closeOnce sync.Once
 
-	readMu  sync.Mutex
-	writeMu sync.Mutex
+	readMu           sync.Mutex
+	writeMu          sync.Mutex
+	incrementalState *openAIWSIncrementalState // 最近成功上下文的摘要，由 writeMu 保护。
 
 	// readerLoopResults 非 nil 表示池为该连接常驻了读循环：coder/websocket 只在
 	// 阻塞读期间应答上游 ping，空闲连接没有读循环会被上游按保活超时关闭。
@@ -592,6 +599,8 @@ func (c *openAIWSConn) writeJSONWithTimeout(parent context.Context, value any, t
 func (c *openAIWSConn) writeJSON(value any, writeCtx context.Context) error {
 	c.writeMu.Lock()
 	defer c.writeMu.Unlock()
+	// 任意新请求都使旧摘要失效，只有完整成功响应才重新登记。
+	c.incrementalState = nil
 	if c.ws == nil {
 		return errOpenAIWSConnClosed
 	}
@@ -1113,6 +1122,14 @@ func (p *openAIWSConnPool) Acquire(ctx context.Context, req openAIWSAcquireReque
 	}
 	queueWait := &openAIWSAcquireQueueWait{}
 	lease, err := p.acquire(ctx, cloneOpenAIWSAcquireRequest(req), 0, queueWait)
+	if err == nil && lease.NeedsRotation() && !req.ForcePreferredConn {
+		// 获取令牌后才退役，覆盖固定连接与排队期间到龄的连接；严格续链由调用方恢复历史。
+		lease.MarkBroken()
+		lease.Release()
+		req.PreferredConnID = ""
+		req.ForceNewConn = true
+		lease, err = p.acquire(ctx, cloneOpenAIWSAcquireRequest(req), 0, queueWait)
+	}
 	if lease != nil && queueWait.rewoken {
 		// 广播重选经 tryAcquire 拿令牌，不像排队分支那样在取得令牌后检查取消，
 		// 这里补上复查：上下文已取消就归还令牌并按取消返回。

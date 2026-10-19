@@ -1435,7 +1435,15 @@ func normalizeOpenAIResponsesWebSocketCompatibilityBody(body []byte, account *Ac
 }
 
 func normalizeOpenAIResponsesWebSocketCompatibilityBodyWithConfig(cfg *config.Config, body []byte, account *Account, responsesLite bool) ([]byte, bool, error) {
-	return normalizeOpenAIResponsesCompatibilityBodyWithOptions(body, account, openAIResponsesCompatibilityOptions{Config: cfg, ResponsesLite: responsesLite})
+	searchBody, searchChanged, err := normalizeOpenAIOAuthWebSearchContentTypes(account, body)
+	if err != nil {
+		return body, false, err
+	}
+	if searchChanged {
+		logOpenAIWSModeInfo("web_search_content_types_normalized account_id=%d content_types=text", account.ID)
+	}
+	next, changed, err := normalizeOpenAIResponsesCompatibilityBodyWithOptions(searchBody, account, openAIResponsesCompatibilityOptions{Config: cfg, ResponsesLite: responsesLite})
+	return next, searchChanged || changed, err
 }
 
 type openAIResponsesCompatibilityOptions struct {

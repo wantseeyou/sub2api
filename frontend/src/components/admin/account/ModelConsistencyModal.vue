@@ -91,6 +91,8 @@
             <summary class="cursor-pointer rounded py-1 font-medium focus-visible:ring-2 focus-visible:ring-primary-500">{{ t('admin.accounts.modelConsistency.details') }}</summary>
             <p class="mt-2">{{ t('admin.accounts.modelConsistency.scoreNotice') }}</p>
             <dl class="mt-2 grid gap-2 break-words sm:grid-cols-2">
+              <div v-if="result.reason"><dt class="inline">{{ t('admin.accounts.modelConsistency.reasonCode') }}: </dt><dd class="inline">{{ result.reason }}</dd></div>
+              <div v-if="result.upstream_status_code"><dt class="inline">{{ t('admin.accounts.modelConsistency.upstreamStatusCode') }}: </dt><dd class="inline">{{ result.upstream_status_code }}</dd></div>
               <div><dt class="inline">{{ t('admin.accounts.modelConsistency.candidate') }}: </dt><dd class="inline">{{ result.candidate_model || '—' }}</dd></div>
               <div><dt class="inline">{{ t('admin.accounts.modelConsistency.score') }}: </dt><dd class="inline">{{ result.score == null ? '—' : result.score.toFixed(4) }}</dd></div>
               <div><dt class="inline">{{ t('admin.accounts.modelConsistency.transport') }}: </dt><dd class="inline">{{ result.transport || '—' }}</dd></div>

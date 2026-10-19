@@ -18,6 +18,8 @@ export interface ModelConsistencyResult {
   status: ModelConsistencyStatus
   // 服务端提供的稳定原因代码。
   reason: string
+  // 上游 HTTP 请求或 WS 握手失败的状态码；旧结果可能没有该字段。
+  upstream_status_code?: number
   // 检测开始时间。
   started_at: string
   // 本批次执行截止时间。

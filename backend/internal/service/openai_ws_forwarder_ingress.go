@@ -285,7 +285,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		}
 		responsesLite := isOpenAIResponsesLiteWebSocketPayload(normalized)
 		if compatibilityBody, compatibilityChanged, compatibilityErr := normalizeOpenAIResponsesWebSocketCompatibilityBodyWithConfig(s.cfg, normalized, account, responsesLite); compatibilityErr != nil {
-			return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", compatibilityErr)
+			return openAIWSClientPayload{}, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, compatibilityErr.Error(), compatibilityErr)
 		} else if compatibilityChanged {
 			normalized = compatibilityBody
 		}
@@ -975,7 +975,8 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	}
 
 	var rejectedFieldRetryState *openAIResponsesRejectedFieldRetryState
-	sendAndRelay := func(turn int, lease *openAIWSConnLease, payload []byte, payloadBytes int, originalModel string, imageBillingModel string, imageSizeTier string, imageInputSize string, requestedReasoningEffort *string) (*OpenAIForwardResult, error) {
+	turnPrevRecoveryTried := false
+	sendAndRelay := func(turn int, lease *openAIWSConnLease, payload []byte, payloadBytes int, originalModel string, imageBillingModel string, imageSizeTier string, imageInputSize string, requestedReasoningEffort *string, executionScope string) (*OpenAIForwardResult, error) {
 		responseModelObserver := &upstreamResponseModelObserver{}
 		if lease == nil {
 			return nil, errors.New("upstream websocket lease is nil")
@@ -988,6 +989,26 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			return nil, timeErr
 		}
 		payloadBytes += len(upstreamPayload) - len(payload)
+		wirePayload, incrementalState, removedItems := prepareOpenAIWSIncremental(lease, openAIWSIncrementalOwner(c, account, executionScope), upstreamPayload)
+		if removedItems > 0 && !turnPrevRecoveryTried {
+			upstreamPayload = wirePayload
+			payloadBytes = len(upstreamPayload)
+			logOpenAIWSModeDebug("ingress_ws_incremental_input account_id=%d turn=%d conn_id=%s removed_items=%d payload_bytes=%d", account.ID, turn, lease.ConnID(), removedItems, payloadBytes)
+		} else {
+			removedItems = 0
+		}
+		// JSON 转义最多扩大到六倍；仅可能触线时编码检查，避免每个小帧额外分配。
+		if s.openAIWSHTTPBridgeEnabled() && int64(len(upstreamPayload))*6+1 >= s.openAIWSHTTPBridgeThresholdBytes() {
+			encoded, encodeErr := json.Marshal(json.RawMessage(upstreamPayload))
+			if encodeErr != nil {
+				return nil, encodeErr
+			}
+			if s.openAIWSPayloadTooLarge(len(encoded) + 1) {
+				return nil, NewOpenAIWSClientCloseError(coderws.StatusMessageTooBig, "WebSocket request is too large; send the complete context over HTTP or reduce the request size", nil)
+			}
+			upstreamPayload = encoded
+			payloadBytes = len(encoded)
+		}
 		c.Set(openAIWSExecutionStageKey, openAIWSExecutionUnknown)
 		if err := lease.WriteJSONWithContextTimeout(ctx, json.RawMessage(upstreamPayload), s.openAIWSWriteTimeout()); err != nil {
 			return nil, NewOpenAIWSClientCloseError(coderws.StatusInternalError, "upstream write failed; execution is uncertain and request was not replayed", wrapOpenAIWSIngressTurnError(
@@ -1011,7 +1032,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		imageCounter := newOpenAIImageOutputCounter()
 		var firstTokenMs *int
 		reqStream := openAIWSPayloadBoolFromRaw(payload, "stream", true)
-		turnPreviousResponseID := openAIWSPayloadStringFromRaw(payload, "previous_response_id")
+		turnPreviousResponseID := openAIWSPayloadStringFromRaw(upstreamPayload, "previous_response_id")
 		turnPreviousResponseIDKind := ClassifyOpenAIPreviousResponseIDKind(turnPreviousResponseID)
 		turnPromptCacheKey := openAIWSPayloadStringFromRaw(payload, "prompt_cache_key")
 		turnStoreDisabled := s.isOpenAIWSStoreDisabledInRequestRaw(payload, account)
@@ -1050,6 +1071,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				upstreamMessage = normalized
 			}
 			c.Set(openAIWSExecutionStageKey, openAIWSResponseReceived)
+			completeOpenAIWSIncremental(lease, incrementalState, upstreamMessage)
 
 			eventType, eventResponseID, _ := parseOpenAIWSEventEnvelope(upstreamMessage)
 			responseModelObserver.ObserveOpenAI(upstreamMessage, eventType)
@@ -1099,6 +1121,11 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				}
 				s.persistOpenAIWSRateLimitSignal(ctx, account, lease.HandshakeHeaders(), upstreamMessage, errCodeRaw, errTypeRaw, errMsgRaw, mappedModel)
 				fallbackReason, _ := classifyOpenAIWSErrorEventFromRaw(errCodeRaw, errTypeRaw, errMsgRaw)
+				if removedItems > 0 && eventCount == 1 && !wroteDownstream && fallbackReason == "previous_response_not_found" {
+					lease.MarkBroken()
+					c.Set(openAIWSExecutionStageKey, openAIWSRejected)
+					return nil, wrapOpenAIWSFallback(openAIWSIncrementalAnchorMissing, errors.New("automatic continuation anchor unavailable"))
+				}
 				if fallbackReason == openAIWSFallbackReasonInvalidEncryptedContent {
 					// 记录被上游拒绝的密文摘要；错误照旧透传，下一轮进场时按摘要预剥离。
 					if digests := collectOpenAIEncryptedContentDigestsRaw(payload); len(digests) > 0 {
@@ -1373,7 +1400,6 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	turn := 1
 	rejectedFieldRetryState = newOpenAIResponsesRejectedFieldRetryState(currentPayload)
 	turnRetry := 0
-	turnPrevRecoveryTried := false
 	// 只有从本连接的新根开始积累的历史，才能证明丢弃续链锚点后上下文仍完整。
 	replayContextComplete := firstPayload.previousResponseID == ""
 	lastTurnFinishedAt := time.Time{}
@@ -1721,6 +1747,31 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 				unpinSessionConn(sessionConnID)
 			}
 		}
+		if sessionLease.NeedsRotation() {
+			// 持久化响应可以跨连接续链，只有连接内上下文需要恢复完整历史。
+			restoreContext := storeDisabled && currentPreviousResponseID != ""
+			if restoreContext {
+				if !replayContextComplete || !currentTurnReplayInputExists ||
+					(hasFunctionCallOutput && !openAIWSRawItemsHaveToolCallContextForOutputs(currentTurnReplayInput)) {
+					resetSessionLease(true)
+					return NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "WebSocket continuation connection is nearing its lifetime limit; resend the complete context without previous_response_id", nil)
+				}
+				rootPayload, _, dropErr := dropPreviousResponseIDFromRawPayload(currentPayload)
+				if dropErr != nil {
+					return fmt.Errorf("prepare websocket connection rotation: %w", dropErr)
+				}
+				rootPayload, inputErr := setOpenAIWSPayloadInputSequence(rootPayload, currentTurnReplayInput, true)
+				if inputErr != nil {
+					return fmt.Errorf("restore websocket context for connection rotation: %w", inputErr)
+				}
+				currentPayload = rootPayload
+				currentPayloadBytes = len(rootPayload)
+			}
+			logOpenAIWSModeInfo("ingress_ws_connection_rotation account_id=%d turn=%d conn_id=%s reason=max_age restored_context=%v", account.ID, turn, sessionConnID, restoreContext)
+			resetSessionLease(true)
+			skipBeforeTurn = true
+			continue
+		}
 		shouldPreflightPing := turn > 1 && sessionLease != nil && sessionLease.SupportsIdlePingWithoutReader() && turnRetry == 0
 		if shouldPreflightPing && openAIWSIngressPreflightPingIdle > 0 && !lastTurnFinishedAt.IsZero() {
 			if time.Since(lastTurnFinishedAt) < openAIWSIngressPreflightPingIdle {
@@ -1851,12 +1902,21 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			)
 		}
 
-		result, relayErr := sendAndRelay(turn, sessionLease, currentPayload, currentPayloadBytes, currentOriginalModel, currentImageBillingModel, currentImageSizeTier, currentImageInputSize, currentRequestedReasoningEffort)
+		incrementalScope, _ := resolveOpenAIWSExecutionScope(c, currentClientPayload, apiKeyID)
+		result, relayErr := sendAndRelay(turn, sessionLease, currentPayload, currentPayloadBytes, currentOriginalModel, currentImageBillingModel, currentImageSizeTier, currentImageInputSize, currentRequestedReasoningEffort, incrementalScope)
 		if relayErr != nil {
 			lastTurnClean = false
 			if isOpenAIWSSessionPreempted(ctx) {
 				sessionLease.MarkBroken()
 				return errOpenAIWSSessionPreempted
+			}
+			if reason, _ := classifyOpenAIWSReconnectReason(relayErr); reason == openAIWSIncrementalAnchorMissing && !turnPrevRecoveryTried {
+				// 只改过发送副本，当前回合仍保留完整输入，可在明确拒绝后恢复一次。
+				turnPrevRecoveryTried = true
+				logOpenAIWSModeInfo("ingress_ws_incremental_recovery account_id=%d turn=%d conn_id=%s action=retry_full_input", account.ID, turn, connID)
+				resetSessionLease(true)
+				skipBeforeTurn = true
+				continue
 			}
 			var rejectedFieldErr *openAIWSRejectedFieldRetryError
 			if errors.As(relayErr, &rejectedFieldErr) && rejectedFieldErr != nil && len(rejectedFieldErr.body) > 0 {

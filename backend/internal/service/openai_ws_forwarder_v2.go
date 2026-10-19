@@ -3,6 +3,7 @@ package service
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -91,12 +92,21 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	_, hasTools := payload["tools"]
 	debugEnabled := isOpenAIWSModeDebugEnabled()
 	payloadBytes := -1
+	var payloadJSON []byte
 	resolvePayloadBytes := func() int {
 		if payloadBytes >= 0 {
 			return payloadBytes
 		}
-		payloadBytes = len(payloadAsJSONBytes(payload))
+		payloadJSON = payloadAsJSONBytes(payload)
+		payloadBytes = len(payloadJSON)
 		return payloadBytes
+	}
+	if s.openAIWSHTTPBridgeEnabled() && s.openAIWSPayloadTooLarge(resolvePayloadBytes()+1) {
+		if previousResponseID != "" {
+			return nil, rejectOpenAIWSOversizedRequest(c)
+		}
+		logOpenAIWSModeInfo("payload_route_http account_id=%d payload_bytes=%d threshold_bytes=%d reason=normalized_payload_too_large", account.ID, resolvePayloadBytes()+1, s.openAIWSHTTPBridgeThresholdBytes())
+		return nil, errOpenAIWSSizeRequiresHTTP
 	}
 	streamValue := "-"
 	if raw, ok := payload["stream"]; ok {
@@ -218,8 +228,9 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		HeadersFactory: func(factoryCtx context.Context, headers http.Header) (http.Header, error) {
 			return s.refreshOpenAIAgentIdentityHeaders(factoryCtx, account, headers)
 		},
-		PreferredConnID: preferredConnID,
-		ForceNewConn:    forceNewConn,
+		PreferredConnID:    preferredConnID,
+		ForcePreferredConn: storeDisabled && previousResponseID != "" && preferredConnID != "",
+		ForceNewConn:       forceNewConn,
 		ProxyURL: func() string {
 			if account.ProxyID != nil && account.Proxy != nil {
 				return account.Proxy.URL()
@@ -228,6 +239,9 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		}(),
 	})
 	if err != nil {
+		if previousResponseID != "" && errors.Is(err, errOpenAIWSPreferredConnUnavailable) {
+			return nil, rejectOpenAIWSContinuationRequest(c)
+		}
 		var agentDialErr *openAIWSDialError
 		if s.isAgentIdentityAccount(ctx, account) && errors.As(err, &agentDialErr) && isAgentIdentityTaskInvalidWSDialError(agentDialErr) && agentTaskRecoveryTried != nil && !*agentTaskRecoveryTried {
 			*agentTaskRecoveryTried = true
@@ -275,6 +289,10 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		}
 		lease.Release()
 	}()
+	if lease.NeedsRotation() && storeDisabled && previousResponseID != "" {
+		// HTTP 续链只有连接内锚点，不能把增量输入当完整上下文交给新连接。
+		return nil, rejectOpenAIWSContinuationRequest(c)
+	}
 	connID := strings.TrimSpace(lease.ConnID())
 	logOpenAIWSModeDebug(
 		"connected account_id=%d account_type=%s transport=%s conn_id=%s conn_reused=%v conn_idle_ms=%d conn_age_ms=%d upstream_pings=%d conn_pick_ms=%d queue_wait_ms=%d has_previous_response_id=%v",
@@ -369,9 +387,39 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 		return nil, err
 	}
 
+	var incrementalState *openAIWSIncrementalState
+	removedItems := 0
+	var outboundPayload any = payload
+	if payloadJSON != nil {
+		outboundPayload = json.RawMessage(payloadJSON)
+	}
+	_, explicitPreviousResponse := payload["previous_response_id"]
+	if owner := openAIWSIncrementalOwner(c, account, executionScope); owner != ([sha256.Size]byte{}) && !explicitPreviousResponse {
+		fullPayload := payloadJSON
+		if fullPayload == nil {
+			fullPayload = payloadAsJSONBytes(payload)
+		}
+		wirePayload, next, removed := prepareOpenAIWSIncremental(lease, owner, fullPayload)
+		incrementalState = next
+		if !c.GetBool(openAIWSIncrementalRecoveryTriedKey) {
+			removedItems = removed
+		}
+		if next != nil {
+			// 复用比较时的编码结果，避免完整历史再次序列化。
+			outboundPayload = json.RawMessage(fullPayload)
+			payloadBytes = len(fullPayload)
+		}
+		if removedItems > 0 {
+			outboundPayload = json.RawMessage(wirePayload)
+			previousResponseID = gjson.GetBytes(wirePayload, "previous_response_id").String()
+			previousResponseIDKind = ClassifyOpenAIPreviousResponseIDKind(previousResponseID)
+			payloadBytes = len(wirePayload)
+			logOpenAIWSModeDebug("incremental_input account_id=%d conn_id=%s removed_items=%d payload_bytes=%d", account.ID, connID, removedItems, payloadBytes)
+		}
+	}
 	// WriteJSON 失败也可能已发送部分字节，不能依据下游无输出重放。
 	c.Set(openAIWSExecutionStageKey, openAIWSExecutionUnknown)
-	if err := lease.WriteJSONWithContextTimeout(ctx, payload, s.openAIWSWriteTimeout()); err != nil {
+	if err := lease.WriteJSONWithContextTimeout(ctx, outboundPayload, s.openAIWSWriteTimeout()); err != nil {
 		lease.MarkBroken()
 		logOpenAIWSModeInfo(
 			"write_request_fail account_id=%d conn_id=%s cause=%s payload_bytes=%d",
@@ -670,7 +718,7 @@ readLoop:
 				return nil, wrapOpenAIWSFallback(classifyOpenAIWSReadFallbackReason(readErr), readErr)
 			}
 			setOpsUpstreamError(c, 0, sanitizeUpstreamErrorMessage(readErr.Error()), "")
-			return nil, fmt.Errorf("openai ws read event: %w", readErr)
+			return nil, wrapOpenAIWSFallback(classifyOpenAIWSReadFallbackReason(readErr), fmt.Errorf("openai ws read event: %w", readErr))
 		}
 		if normalized, changed := normalizeCompletedImageGenerationStatus(message); changed {
 			message = normalized
@@ -681,6 +729,7 @@ readLoop:
 			continue
 		}
 		c.Set(openAIWSExecutionStageKey, openAIWSResponseReceived)
+		completeOpenAIWSIncremental(lease, incrementalState, message)
 		responseModelObserver.ObserveOpenAI(message, eventType)
 		eventCount++
 		if firstEventType == "" {
@@ -747,6 +796,13 @@ readLoop:
 				errMsg = "Upstream websocket error"
 			}
 			fallbackReason, canFallback := classifyOpenAIWSErrorEventFromRaw(errCodeRaw, errTypeRaw, errMsgRaw)
+			if removedItems > 0 && eventCount == 1 && fallbackReason == "previous_response_not_found" {
+				lease.MarkBroken()
+				c.Set(openAIWSExecutionStageKey, openAIWSRejected)
+				// 标记覆盖整个请求的后续尝试，中间连接错误不能重新开启自动裁剪。
+				c.Set(openAIWSIncrementalRecoveryTriedKey, true)
+				return nil, wrapOpenAIWSFallback(openAIWSIncrementalAnchorMissing, errors.New("automatic continuation anchor unavailable"))
+			}
 			errCode, errType, errMessage := summarizeOpenAIWSErrorEventFieldsFromRaw(errCodeRaw, errTypeRaw, errMsgRaw)
 			logOpenAIWSModeInfo(
 				"error_event account_id=%d conn_id=%s idx=%d fallback_reason=%s can_fallback=%v err_code=%s err_type=%s err_message=%s",
