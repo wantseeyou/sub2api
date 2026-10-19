@@ -48,7 +48,7 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 	return s.handleStreamingResponseWithReasoning(ctx, resp, c, account, startTime, originalModel, mappedModel, "")
 }
 
-func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, startTime time.Time, originalModel, mappedModel, reasoningEffort string) (*openaiStreamingResult, error) {
+func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.Context, resp *http.Response, c *gin.Context, account *Account, startTime time.Time, originalModel, mappedModel, reasoningEffort string) (result *openaiStreamingResult, resultErr error) {
 	observer := upstreamResponseModelObserverFromContext(c)
 	if observer == nil {
 		observer = beginUpstreamResponseModelObservation(c)
@@ -90,9 +90,10 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 		c.Header("x-request-id", v)
 	}
 	applyAttemptResponseHeaders := func() {
-		if !stageFirstOutput || len(attemptResponseHeaders) == 0 || c.Writer.Written() {
+		if !stageFirstOutput || c.Writer.Written() {
 			return
 		}
+		lockOpenAIForwardAttempt(c, account)
 		for key, values := range attemptResponseHeaders {
 			for _, value := range values {
 				c.Writer.Header().Add(key, value)
@@ -258,6 +259,13 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 	var streamEarlyErr error
 	terminalFailurePending := false
 	failureDelivered := false
+	defer func() {
+		if failureDelivered {
+			MarkResponseCommitted(c)
+		} else if resultErr != nil && OpenAIForwardAttemptLocked(c) && !clientDisconnected {
+			writeOpenAICommittedFailure(c, responseID, originalModel, "Upstream response did not complete")
+		}
+	}()
 	suppressCurrentEvent := false
 	var bareErrorPayload []byte
 	bareErrorAccountSideEffectsPending := false
@@ -319,6 +327,16 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 			return
 		}
 		errorEventSent = true
+		if codexFailureTerminal {
+			applyAttemptResponseHeaders()
+			if err := flushBuffered(); err != nil {
+				clientDisconnected = true
+				return
+			}
+			writeOpenAICommittedFailure(c, responseID, originalModel, message)
+			failureDelivered = IsResponseCommitted(c)
+			return
+		}
 		// Responses error events use top-level code/message/param fields. A nested
 		// Chat Completions error envelope loses the classification in strict clients.
 		payload := `{"type":"error","sequence_number":0,"code":` + strconv.Quote(code) + `,"message":` + strconv.Quote(message) + `,"param":null}`
@@ -403,6 +421,10 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 			)
 		}
 		flushPending("Client disconnected during final flush, returning collected usage")
+		if terminalFailurePending && !clientDisconnected {
+			terminalFailurePending = false
+			failureDelivered = true
+		}
 		if !sawTerminalEvent {
 			if openAIStreamClientOutputStarted(c, clientOutputStarted) && !clientDisconnected {
 				s.recordOpenAIProxyStreamDisconnect(account, errors.New("stream ended before terminal event"), upstreamRequestID)
@@ -550,7 +572,7 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 						UpstreamOutTok: usage.OutputTokens,
 					})
 				}
-				outputStarted := openAIStreamClientOutputStarted(c, clientOutputStarted)
+				outputStarted := openAIStreamClientOutputStarted(c, clientOutputStarted) || OpenAIForwardAttemptLocked(c)
 				if !outputStarted && !cyberHit {
 					if compactErr := newOpenAICompactFallbackSignal(c, dataBytes, failedMessage); compactErr != nil {
 						sawFailedEvent = true
@@ -976,8 +998,10 @@ func (s *OpenAIGatewayService) handleStreamingResponseWithReasoning(ctx context.
 				continue
 			}
 			if stageFirstOutput {
-				// Bypass attempt-local buffered frames. The stable SSE headers may be
-				// committed here, but account headers remain private until semantic output.
+				// Codex 心跳会提交 HTTP 头，必须同时交付本次账号的头并锁定尝试。
+				if account.IsOpenAIOAuthLike() {
+					applyAttemptResponseHeaders()
+				}
 				n, err := w.Write([]byte(":\n\n"))
 				recordOpenAIStreamKeepaliveBytes(c, n)
 				if err != nil {

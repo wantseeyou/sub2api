@@ -685,6 +685,17 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	if account == nil {
 		return errors.New("account is nil")
 	}
+	if c != nil {
+		c.Set(codexWSFrameIdentityContextKey, true)
+		c.Set(codexWSFrameFollowupContextKey, false)
+		c.Set(openAIWSExecutionStageKey, openAIWSNotSent)
+	}
+	fingerprintIDs := resolveCodexFingerprintIDsForRequest(c, account, firstClientMessage)
+	stageCodexFingerprintIDs(c, fingerprintIDs)
+	ingressIdentity := currentCodexClientIdentity(c)
+	if err := s.guardCodexIdentityContinuation(c, account, firstClientMessage); err != nil {
+		return NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, err.Error(), err)
+	}
 	if err := validateOpenAIWSBearerToken(account, token); err != nil {
 		return err
 	}
@@ -773,6 +784,11 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	}
 	if accountScoped {
 		firstClientMessage = accountScopedFirst
+	}
+	if fingerprintPayload, changed, fingerprintErr := applyCodexFingerprintClientMetadataRaw(firstClientMessage, fingerprintIDs); fingerprintErr != nil {
+		return NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket identity metadata", fingerprintErr)
+	} else if changed {
+		firstClientMessage = fingerprintPayload
 	}
 	usageMeta := newOpenAIWSPassthroughUsageMeta(initialRequestModel, firstClientMessage)
 	updatedFirst, blocked, policyErr := s.applyOpenAIFastPolicyToWSResponseCreate(ctx, account, capturedSessionModel, firstClientMessage)
@@ -1001,6 +1017,19 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 						turnLifecycle.cancelResponseCreate()
 					}
 				}()
+				if c != nil {
+					c.Set(codexWSFrameFollowupContextKey, true)
+				}
+				stageCodexFingerprintIDs(c, resolveCodexFingerprintIDsForRequest(c, account, payload))
+				identity := currentCodexClientIdentity(c)
+				if (ingressIdentity.threadID != "" && identity.threadID != ingressIdentity.threadID) ||
+					(ingressIdentity.sessionID != "" && identity.sessionID != ingressIdentity.sessionID) {
+					return payload, nil, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "a different Codex thread requires a new websocket connection", nil)
+				}
+				ingressIdentity = identity
+				if err := s.guardCodexIdentityContinuation(c, account, payload); err != nil {
+					return payload, nil, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, err.Error(), err)
+				}
 			}
 			responsesLite := isResponseCreate && isOpenAIResponsesLiteWebSocketPayload(payload)
 			if isResponseCreate {
@@ -1032,6 +1061,11 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				}
 				if accountScoped {
 					payload = accountScopedPayload
+				}
+				if fingerprintPayload, changed, fingerprintErr := applyCodexFingerprintClientMetadataRaw(payload, stagedCodexFingerprintIDs(c, account)); fingerprintErr != nil {
+					return payload, nil, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket identity metadata", fingerprintErr)
+				} else if changed {
+					payload = fingerprintPayload
 				}
 			}
 			if isResponseCreate {
@@ -1122,6 +1156,10 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			//     覆盖（Store(nil)），因为 OpenAI 上游对该帧实际不传
 			//     service_tier 时按 default 处理，billing 应如实反映。
 			if policyErr == nil && blocked == nil && isResponseCreate {
+				if c != nil {
+					// 返回过滤后的帧即交给写入者；部分发送同样属于执行状态不明。
+					c.Set(openAIWSExecutionStageKey, openAIWSExecutionUnknown)
+				}
 				usageMeta.updateFromResponseCreate(out, model, requestModelForThisFrame)
 				_, actualModel := usageMeta.turnModels(requestModelForThisFrame)
 				SetOpsUpstreamModel(c, actualModel)
@@ -1147,6 +1185,9 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	}
 	upstreamFirstMessageSent := false
 	firstWriteCtx, cancelFirstWrite := context.WithTimeout(ctx, s.openAIWSWriteTimeout())
+	if c != nil {
+		c.Set(openAIWSExecutionStageKey, openAIWSExecutionUnknown)
+	}
 	firstWriteErr := relayUpstreamFrameConn.WriteFrame(firstWriteCtx, coderws.MessageText, firstClientMessage)
 	cancelFirstWrite()
 	if firstWriteErr != nil {
@@ -1265,9 +1306,15 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			AfterClientWrite: func(msgType coderws.MessageType, payload []byte, writeErr error) {
 				if msgType == coderws.MessageText && writeErr == nil {
 					eventType, _, _ := parseOpenAIWSEventEnvelope(payload)
+					if eventType == "response.created" || openAIWSPassthroughIsTerminalOutput(payload) {
+						s.noteCodexResponseIdentity(c, account, gjson.GetBytes(payload, "response.id").String())
+					}
 					markOpenAIWSClientVisibleFailure(c, eventType, payload)
 				}
 				if msgType == coderws.MessageText && openAIWSPassthroughIsTerminalOutput(payload) {
+					if c != nil {
+						c.Set(openAIWSExecutionStageKey, openAIWSFinished)
+					}
 					turnLifecycle.finishTerminalWrite(writeErr == nil, clientFrameConn.markTurnCompleted)
 				}
 			},
@@ -1275,7 +1322,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				if context.Cause(ctx) != nil {
 					return
 				}
-				status, reason, ok := openAIWSPassthroughRelayClientClose(exit, int(completedTurns.Load()))
+				status, reason, ok := openAIWSPassthroughRelayClientClose(exit)
 				if !ok {
 					return
 				}
@@ -1291,6 +1338,9 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 					return nil
 				}
 				eventType, _, _ := parseOpenAIWSEventEnvelope(payload)
+				if c != nil {
+					c.Set(openAIWSExecutionStageKey, openAIWSResponseReceived)
+				}
 				if eventType == "response.created" {
 					failureAccountSideEffectsApplied = false
 				}
@@ -1322,6 +1372,9 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 						"upstream rate limit exceeded; please reconnect",
 						errors.New("later passthrough turn was rate limited before output"),
 					)
+				}
+				if c != nil {
+					c.Set(openAIWSExecutionStageKey, openAIWSRejected)
 				}
 				return s.newOpenAIWSRateLimitFailoverError(account, handshakeHeaders, payload, errMsgRaw)
 			},
@@ -1424,7 +1477,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		// The relay ran over the WebSocket transport, so a missing managed
 		// proxy is an unknown route (http.DefaultClient), not a direct one.
 		wsProxyID, wsProxyName := opsUpstreamWSProxyAttribution(account)
-		failoverErr := s.newOpenAIFirstOutputTimeoutError(
+		_ = s.newOpenAIFirstOutputTimeoutError(
 			ctx,
 			c,
 			account,
@@ -1437,18 +1490,12 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			"websocket_first_semantic_output",
 			handshakeHeaders,
 		)
-		if turnCount == 0 && !relayExit.WroteDownstream {
-			relayErr = failoverErr
-		} else {
-			// The handler only retains the initial response.create across
-			// account attempts. Replaying it after a later-turn timeout would
-			// duplicate the first turn, so later turns end the client session.
-			relayErr = NewOpenAIWSClientCloseError(
-				coderws.StatusGoingAway,
-				"upstream produced no semantic output; please reconnect",
-				firstOutputTimeoutErr,
-			)
-		}
+		// 首轮同样已经写出，超时不能证明未执行，禁止由 handler 换号重放。
+		relayErr = NewOpenAIWSClientCloseError(
+			coderws.StatusGoingAway,
+			"upstream produced no semantic output; execution uncertain; request was not replayed",
+			firstOutputTimeoutErr,
+		)
 	}
 	var activeTurnTimeoutErr *openAIWSPassthroughActiveTurnTimeoutError
 	if errors.As(relayErr, &activeTurnTimeoutErr) {
@@ -1479,7 +1526,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	return turnErr
 }
 
-func openAIWSPassthroughRelayClientClose(exit openaiwsv2.RelayExit, completedTurns int) (coderws.StatusCode, string, bool) {
+func openAIWSPassthroughRelayClientClose(exit openaiwsv2.RelayExit) (coderws.StatusCode, string, bool) {
 	var closeErr *OpenAIWSClientCloseError
 	if errors.As(exit.Err, &closeErr) {
 		return closeErr.StatusCode(), closeErr.Reason(), true
@@ -1490,10 +1537,7 @@ func openAIWSPassthroughRelayClientClose(exit openaiwsv2.RelayExit, completedTur
 	}
 	var firstOutputTimeoutErr *openAIWSPassthroughFirstOutputTimeoutError
 	if errors.As(exit.Err, &firstOutputTimeoutErr) {
-		if completedTurns > 0 || exit.WroteDownstream {
-			return coderws.StatusGoingAway, "upstream produced no semantic output; please reconnect", true
-		}
-		return 0, "", false
+		return coderws.StatusGoingAway, "upstream produced no semantic output; execution uncertain; request was not replayed", true
 	}
 	if !exit.Graceful && exit.Stage == "read_upstream" {
 		return coderws.StatusInternalError, "upstream websocket proxy failed", true

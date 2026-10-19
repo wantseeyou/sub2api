@@ -4,6 +4,7 @@
  */
 
 import { apiClient } from '../client'
+import type { ModelConsistencySnapshot, ModelConsistencyRun } from '@/types/modelConsistency'
 import type { OpenAIReferralRefreshResult, OpenAIReferralSendResult } from '@/types/openaiReferrals'
 import type {
   Account,
@@ -1131,7 +1132,28 @@ export async function refreshOpenCodeGoUsage(id: number): Promise<OpenCodeGoUsag
   return data
 }
 
+// 获取账号各请求模型的最近检测结果和当前适用性。
+export async function getModelConsistency(id: number, signal?: AbortSignal): Promise<ModelConsistencySnapshot> {
+  const { data } = await apiClient.get<ModelConsistencySnapshot>(`/admin/accounts/${id}/model-consistency`, { signal })
+  return data
+}
+
+// 为账号启动一批独立模型一致性检测。
+export async function startModelConsistency(id: number, models: string[]): Promise<ModelConsistencyRun> {
+  const { data } = await apiClient.post<ModelConsistencyRun>(`/admin/accounts/${id}/model-consistency`, { models })
+  return data
+}
+
+// 请求取消指定检测批次，终态以随后读取的结果为准。
+export async function cancelModelConsistency(id: number, runId: string): Promise<{ cancelled: boolean }> {
+  const { data } = await apiClient.delete<{ cancelled: boolean }>(`/admin/accounts/${id}/model-consistency/${encodeURIComponent(runId)}`)
+  return data
+}
+
 export const accountsAPI = {
+  getModelConsistency,
+  startModelConsistency,
+  cancelModelConsistency,
   list,
   listWithEtag,
   getUpstreamBillingRatesWithEtag,

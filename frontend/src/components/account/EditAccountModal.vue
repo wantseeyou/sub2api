@@ -1983,6 +1983,12 @@
         </div>
       </div>
 
+      <CodexAdvancedSettings
+        v-if="supportsCodexDiagnostics(account)"
+        v-model:http-to-ws="openaiHttpToWsEnabled"
+        v-model:thread-isolation="codexThreadIsolationEnabled"
+      />
+
       <!-- OpenAI WS Mode 三态（off/ctx_pool/passthrough） -->
       <div
         v-if="account?.platform === 'openai' && (account?.type === 'oauth' || account?.type === 'setup-token' || account?.type === 'apikey')"
@@ -3255,6 +3261,8 @@ import Select from '@/components/common/Select.vue'
 import HelpTooltip from '@/components/common/HelpTooltip.vue'
 import UpstreamRequestIdHeaderField from '@/components/account/UpstreamRequestIdHeaderField.vue'
 import Toggle from '@/components/common/Toggle.vue'
+import CodexAdvancedSettings from './CodexAdvancedSettings.vue'
+import { supportsCodexDiagnostics } from '@/utils/modelConsistency'
 import Icon from '@/components/icons/Icon.vue'
 import ProxySelector from '@/components/common/ProxySelector.vue'
 import ProxyAdBanner from '@/components/common/ProxyAdBanner.vue'
@@ -3856,6 +3864,8 @@ const openAIImagesUrlToB64JsonEnabled = ref(false)
 const openAIEndpointCapabilities = ref<OpenAIEndpointCapability[]>(['chat_completions', 'embeddings'])
 const openaiOAuthResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
 const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
+const openaiHttpToWsEnabled = ref(false)
+const codexThreadIsolationEnabled = ref(false)
 const codexCLIOnlyEnabled = ref(false)
 const codexCLIOnlyAppServerEnabled = ref(false)
 type CodexFingerprintMode = 'off' | 'device' | 'session' | 'full'
@@ -4355,6 +4365,8 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
   codexCLIOnlyEnabled.value = false
   codexCLIOnlyAppServerEnabled.value = false
+  openaiHttpToWsEnabled.value = supportsCodexDiagnostics(newAccount) && extra?.openai_http_to_ws_enabled === true
+  codexThreadIsolationEnabled.value = supportsCodexDiagnostics(newAccount) && extra?.codex_thread_isolation_enabled === true
   codexFingerprintMode.value = 'off'
   codexImageToolMode.value = 'inherit'
   anthropicPassthroughEnabled.value = false
@@ -5892,6 +5904,10 @@ const handleSubmit = async () => {
     if (props.account.platform === 'openai' && (props.account.type === 'oauth' || props.account.type === 'setup-token' || props.account.type === 'apikey')) {
       const currentExtra = (props.account.extra as Record<string, unknown>) || {}
       const newExtra: Record<string, unknown> = { ...currentExtra }
+      if (supportsCodexDiagnostics(props.account)) {
+        newExtra.openai_http_to_ws_enabled = openaiHttpToWsEnabled.value
+        newExtra.codex_thread_isolation_enabled = codexThreadIsolationEnabled.value
+      }
       const hadCodexCLIOnlyEnabled = currentExtra.codex_cli_only === true
       if (props.account.type === 'oauth' || props.account.type === 'setup-token') {
         newExtra.openai_oauth_responses_websockets_v2_mode = openaiOAuthResponsesWebSocketV2Mode.value
@@ -6088,6 +6104,9 @@ const handleSubmit = async () => {
       }
       updatePayload.extra = newExtra
     }
+
+    // 检测结果由服务端托管，账号编辑不提交打开弹窗时的旧快照。
+    if (updatePayload.extra) delete (updatePayload.extra as Record<string, unknown>).model_consistency_results
 
     const canContinue = await ensureAntigravityMixedChannelConfirmed(async () => {
       await submitUpdateAccount(accountID, updatePayload)

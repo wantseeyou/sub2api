@@ -156,9 +156,8 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_StateBoundToExec
 	require.True(t, connBoundToScope, "上游连接应绑定到执行作用域")
 	_, turnStateOnLegacy := stateStore.GetSessionTurnState(groupID, legacyHash)
 	require.False(t, turnStateOnLegacy, "turn state 不得绑定到会话哈希")
-	turnState, turnStateOnScope := stateStore.GetSessionTurnState(groupID, scope)
-	require.True(t, turnStateOnScope, "turn state 应绑定到执行作用域")
-	require.Equal(t, "turn-state-from-upstream", turnState)
+	_, turnStateOnScope := stateStore.GetSessionTurnState(groupID, scope)
+	require.False(t, turnStateOnScope, "未交付客户端的上游握手状态不得进入会话复用缓存")
 }
 
 // openAIWSGatedConn 是只回一个事件的假上游连接：收到请求后关闭 sent，

@@ -64,11 +64,12 @@ var schedulerNeutralExtraKeyPrefixes = []string{
 }
 
 var schedulerNeutralExtraKeys = map[string]struct{}{
-	"codex_usage_updated_at":     {},
-	"codex_credits_snapshot":     {},
-	"codex_referral_snapshot":    {},
-	"grok_billing_snapshot":      {},
-	"session_window_utilization": {},
+	service.ModelConsistencyResultsExtraKey: {},
+	"codex_usage_updated_at":                {},
+	"codex_credits_snapshot":                {},
+	"codex_referral_snapshot":               {},
+	"grok_billing_snapshot":                 {},
+	"session_window_utilization":            {},
 }
 
 const postgresParameterBatchSize = 50000
@@ -138,6 +139,7 @@ func createAccountRecord(ctx context.Context, client *dbent.Client, account *ser
 	if account == nil {
 		return service.ErrAccountNilInput
 	}
+	account.Extra = service.StripModelConsistencyExtra(account.Extra)
 
 	builder := client.Account.Create().
 		SetName(account.Name).
@@ -670,7 +672,8 @@ func lockAndMergeAccountProbeExtra(
 				false
 			),
 			extra -> 'opencode_go_usage_auto_refresh',
-			extra -> 'opencode_go_usage_snapshot'
+			extra -> 'opencode_go_usage_snapshot',
+			extra -> 'model_consistency_results'
 		FROM accounts
 		WHERE id = $1 AND deleted_at IS NULL
 		FOR NO KEY UPDATE
@@ -699,6 +702,7 @@ func lockAndMergeAccountProbeExtra(
 		currentOllamaSnapshot          []byte
 		currentOpenCodeAutoRefresh     []byte
 		currentOpenCodeSnapshot        []byte
+		currentModelConsistency        []byte
 	)
 	if err := rows.Scan(
 		&identityUnchanged,
@@ -713,6 +717,7 @@ func lockAndMergeAccountProbeExtra(
 		&opencodeGroupIdentityUnchanged,
 		&currentOpenCodeAutoRefresh,
 		&currentOpenCodeSnapshot,
+		&currentModelConsistency,
 	); err != nil {
 		return nil, err
 	}
@@ -720,7 +725,12 @@ func lockAndMergeAccountProbeExtra(
 		return nil, err
 	}
 
-	extra := copyJSONMap(normalizeJSONMap(account.Extra))
+	extra := copyJSONMap(normalizeJSONMap(service.StripModelConsistencyExtra(account.Extra)))
+	if snapshot, ok, err := decodeAccountExtraJSON(currentModelConsistency); err != nil {
+		return nil, err
+	} else if ok {
+		extra[service.ModelConsistencyResultsExtraKey] = snapshot
+	}
 	for _, key := range []string{
 		service.UpstreamBillingProbeEnabledExtraKey,
 		service.UpstreamBillingRateSyncEnabledExtraKey,
@@ -2731,6 +2741,7 @@ func (r *accountRepository) AutoPauseExpiredAccounts(ctx context.Context, now ti
 }
 
 func (r *accountRepository) UpdateExtra(ctx context.Context, id int64, updates map[string]any) error {
+	updates = service.StripModelConsistencyExtra(updates)
 	updates = stripCodexFingerprintSeedFromExtraUpdate(updates)
 	if len(updates) == 0 {
 		return nil
@@ -3005,6 +3016,7 @@ func ollamaCloudUsageSnapshotClearRequested(extra map[string]any) bool {
 }
 
 func (r *accountRepository) BulkUpdate(ctx context.Context, ids []int64, updates service.AccountBulkUpdate) (int64, error) {
+	updates.Extra = service.StripModelConsistencyExtra(updates.Extra)
 	if len(ids) == 0 {
 		return 0, nil
 	}

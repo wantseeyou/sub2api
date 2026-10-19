@@ -146,6 +146,7 @@ func (s *OpenAIGatewayService) buildOpenAIWSHeaders(
 	}
 	applyCodexAccountIdentityHeaders(headers, codexAccountIdentitySource(c, account), getAPIKeyIDFromContext(c))
 	applyStagedCodexFingerprintHeaders(c, account, headers)
+	s.guardOpenAICodexTurnStateEcho(c, account, headers)
 
 	if account != nil && account.UsesOpenAICodexProtocol() {
 		if err := resolveAndSetOpenAIChatGPTAccountHeaders(ctx, s.accountRepo, headers, account); err != nil {
@@ -620,6 +621,40 @@ func openAIWSInputIsPrefixExtended(previousPayload, currentPayload []byte) (bool
 	return true, nil
 }
 
+// normalizeOpenAIWSReplayItemForCompare 仅在历史比较时统一 assistant 文本表示并忽略输出附加字段。
+func normalizeOpenAIWSReplayItemForCompare(raw []byte) []byte {
+	itemType := gjson.GetBytes(raw, "type").String()
+	if gjson.GetBytes(raw, "role").String() != "assistant" || (itemType != "" && itemType != "message") {
+		return normalizeOpenAIWSJSONForCompareOrRaw(raw)
+	}
+	var item map[string]any
+	if err := decodeOpenAIJSONUseNumber(raw, &item); err != nil {
+		return bytes.TrimSpace(raw)
+	}
+	item["type"] = "message"
+	delete(item, "id")
+	delete(item, "status")
+	delete(item, "annotations")
+	switch content := item["content"].(type) {
+	case string:
+		item["content"] = []any{map[string]any{"type": "output_text", "text": content}}
+	case []any:
+		for _, value := range content {
+			if part, ok := value.(map[string]any); ok {
+				delete(part, "annotations")
+				if part["type"] == "input_text" {
+					part["type"] = "output_text"
+				}
+			}
+		}
+	}
+	normalized, err := json.Marshal(item)
+	if err != nil {
+		return bytes.TrimSpace(raw)
+	}
+	return normalized
+}
+
 func openAIWSRawItemsHasPrefix(items []json.RawMessage, prefix []json.RawMessage) bool {
 	if len(prefix) == 0 {
 		return true
@@ -632,8 +667,8 @@ func openAIWSRawItemsHasPrefix(items []json.RawMessage, prefix []json.RawMessage
 		if bytes.Equal(bytes.TrimSpace(prefix[idx]), bytes.TrimSpace(items[idx])) {
 			continue
 		}
-		previousNormalized := normalizeOpenAIWSJSONForCompareOrRaw(prefix[idx])
-		currentNormalized := normalizeOpenAIWSJSONForCompareOrRaw(items[idx])
+		previousNormalized := normalizeOpenAIWSReplayItemForCompare(prefix[idx])
+		currentNormalized := normalizeOpenAIWSReplayItemForCompare(items[idx])
 		if !bytes.Equal(previousNormalized, currentNormalized) {
 			return false
 		}

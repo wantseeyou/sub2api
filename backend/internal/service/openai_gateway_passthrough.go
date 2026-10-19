@@ -135,7 +135,10 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	reqStream bool,
 	startTime time.Time,
 ) (*OpenAIForwardResult, error) {
+	fpIDs := resolveCodexFingerprintIDsForRequest(c, account, body)
 	requestedModel := reqModel
+	clientReqStream := reqStream
+	executionScope, _ := resolveOpenAIWSExecutionScope(c, body, getAPIKeyIDFromContext(c))
 	upstreamPassthroughModel := ""
 	if isOpenAIResponsesCompactPath(c) {
 		compactMappedModel := s.resolveOpenAICompactFallbackModel(account, reqModel)
@@ -194,11 +197,6 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		// 手术，透传热路径禁全量 Unmarshal），出站头改写由请求构造器读取
 		// context 中的同一份 IDs 完成（turn_id 等随机字段两侧必须一致）。
 		if !isOpenAIResponsesCompactPath(c) {
-			var clientHeaders http.Header
-			if c != nil && c.Request != nil {
-				clientHeaders = c.Request.Header
-			}
-			fpIDs := resolveCodexFingerprintIDsFromRequest(account, clientHeaders)
 			if fpIDs != nil {
 				fpBody, fpChanged, fpErr := applyCodexFingerprintClientMetadataRaw(body, fpIDs)
 				if fpErr != nil {
@@ -353,6 +351,49 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 
 	if c != nil {
 		c.Set("openai_passthrough", true)
+	}
+
+	decision := s.resolveOpenAIForwardTransport(c, account)
+	if gjson.GetBytes(body, "background").Bool() {
+		decision = openAIWSHTTPDecision("background_requires_http")
+	}
+	c.Set("openai_ws_transport_decision", string(decision.Transport))
+	c.Set("openai_ws_transport_reason", decision.Reason)
+	if decision.Transport == OpenAIUpstreamTransportResponsesWebsocketV2 {
+		var payload map[string]any
+		if err := decodeOpenAIJSONUseNumber(body, &payload); err != nil {
+			return nil, fmt.Errorf("decode passthrough WS payload: %w", err)
+		}
+		actualModel := strings.TrimSpace(gjson.GetBytes(body, "model").String())
+		if actualModel == "" {
+			actualModel = reqModel
+		}
+		SetOpsUpstreamModel(c, actualModel)
+		var result *OpenAIForwardResult
+		var wsErr error
+		agentTaskRecoveryTried := false
+		for attempt := 1; attempt <= openAIWSReconnectRetryLimit+1; attempt++ {
+			result, wsErr = s.forwardOpenAIWSV2(ctx, c, account, payload,
+				gjson.GetBytes(body, "prompt_cache_key").String(), executionScope, token,
+				decision, true, clientReqStream, requestedModel, actualModel, startTime, attempt, "", &agentTaskRecoveryTried)
+			if wsErr == nil || OpenAIForwardAttemptLocked(c) || c.Writer.Written() {
+				break
+			}
+			if _, retryable := classifyOpenAIWSReconnectReason(wsErr); !retryable {
+				break
+			}
+		}
+		if wsErr != nil {
+			s.writeOpenAIWSFallbackErrorResponse(c, account, wsErr)
+			return result, wsErr
+		}
+		result.ReasoningEffort = reasoningEffort
+		if result.ImageCount > 0 {
+			result.BillingModel = imageBillingModel
+			result.ImageSize = imageSizeTier
+			result.ImageInputSize = imageInputSize
+		}
+		return result, nil
 	}
 
 	agentTaskRecoveryTried := false
@@ -1857,7 +1898,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	startTime time.Time,
 	originalModel string,
 	mappedModel string,
-) (*openaiStreamingResultPassthrough, error) {
+) (result *openaiStreamingResultPassthrough, resultErr error) {
 	observer := upstreamResponseModelObserverFromContext(c)
 	if observer == nil {
 		observer = beginUpstreamResponseModelObservation(c)
@@ -1897,6 +1938,19 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	clientOutputStarted := false
 	codexFailureTerminal := account != nil && account.Platform == PlatformOpenAI
 	failureDelivered := false
+	commitHeaders := func() {
+		if !c.Writer.Written() {
+			s.relayOpenAICodexTurnState(c, account, resp.Header)
+			lockOpenAIForwardAttempt(c, account)
+		}
+	}
+	defer func() {
+		if failureDelivered {
+			MarkResponseCommitted(c)
+		} else if resultErr != nil && OpenAIForwardAttemptLocked(c) && !clientDisconnected {
+			writeOpenAICommittedFailure(c, responseID, originalModel, "Upstream response did not complete")
+		}
+	}()
 	suppressCurrentEvent := false
 	responseFailedPending := false
 	var bareErrorPayload []byte
@@ -1908,43 +1962,11 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	// pendingLines 在首个可见输出前保留前导事件，确保无输出失败仍可安全 failover。
 	pendingLines := make([]string, 0, 8)
 
-	// ── 首个可见输出之前的下游 keepalive ──────────────────────────────────
-	//
-	// 与 Forward 路径同源的问题。openai_gateway_response_handling.go 里那句注释
-	// 说得最清楚：
-	//
-	//   "Track downstream writes separately from upstream reads: pre-output
-	//    failover can buffer response.created / response.in_progress, so
-	//    keepalive must be based on downstream idle time."
-	//
-	// 上面的 pendingLines 正是同一种缓冲：首个可见输出到来之前，下游【一个字节
-	// 都收不到】—— 连 HTTP 响应头都不会提交（gin 的 ResponseWriter 直到首次写入
-	// 才发送 header）。Forward 路径为此加了心跳，透传路径漏了。
-	//
-	// 推理模型在首个可见输出前思考数百秒是常态，于是中间层代理会按空闲超时把
-	// 连接判死。这不是假设：某生产部署实测 12 小时内 44 个 /v1/responses 请求在
-	// 600~900s 才产出首个可见输出（每个 3~5 万 output token，上游其实算完了），
-	// 全部被中间 nginx 的 proxy_read_timeout(600s) 判超时回 504，用户一个字没拿到。
-	//
-	// 心跳写出的 SSE 注释同时做到三件事：
-	//   1. 提交 HTTP 响应头，让下游知道连接活着；
-	//   2. 刷新中间层的空闲超时（proxy_read_timeout 衡量的是两次读之间的间隔，
-	//      不是请求总时长），长推理因此不再被误杀；
-	//   3. 不写出任何 pendingLines、不泄露账号相关的头，
-	//      且心跳字节已由 OpenAICompactKeepaliveAdjustedWrittenSize 排除，
-	//      所以 pre-output failover 的能力完全不受影响（#3887 的记账在此复用）。
-	//
-	// 用 startOpenAISSEKeepalive 而不是 StartOpenAICompactSSEKeepalive：后者会检查
-	// compact 标记，而这里是普通 /v1/responses 透传。走到这一行时上游已回
-	// text/event-stream、SSE 响应头也已设好，处于流式上下文是确定的。
-	stopKeepalive := func() {}
-	if s.cfg != nil && s.cfg.Gateway.StreamKeepaliveInterval > 0 {
-		stopKeepalive = startOpenAISSEKeepalive(c,
-			time.Duration(s.cfg.Gateway.StreamKeepaliveInterval)*time.Second)
+	// 读取在有界 goroutine 中进行，心跳和业务事件由当前循环串行写出。
+	keepaliveInterval := time.Duration(0)
+	if s.cfg != nil {
+		keepaliveInterval = time.Duration(s.cfg.Gateway.StreamKeepaliveInterval) * time.Second
 	}
-	// 任何返回路径都要停拍。Stop 与心跳 goroutine 之间有互斥锁，
-	// 返回后不会再有字节写出。
-	defer stopKeepalive()
 	// flushPending 表示已写入但未到 SSE 空行边界的脏状态；defer 兜底函数退出前的残留，断连后不再 Flush。
 	flushPending := false
 	pendingSSEEventType := ""
@@ -1957,6 +1979,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 	}
 	defer flushPendingOutput()
 	writePendingLines := func() bool {
+		commitHeaders()
 		for _, pending := range pendingLines {
 			if _, err := fmt.Fprintln(w, pending); err != nil {
 				clientDisconnected = true
@@ -1978,6 +2001,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 		if clientDisconnected || !writePendingLines() {
 			return
 		}
+		commitHeaders()
 		if _, err := fmt.Fprint(w, buildOpenAIResponseFailedSSE(responseID, originalModel, createdAtTracker.Value(), bareErrorPayload, failedMessage)); err != nil {
 			clientDisconnected = true
 			return
@@ -2009,8 +2033,75 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 		}
 	}
 
-	for documentScanner.Scan() {
-		line := documentScanner.Text()
+	var readEvents <-chan openAIPassthroughReadEvent
+	var keepalive <-chan time.Time
+	var ticker *time.Ticker
+	if keepaliveInterval > 0 {
+		ticker = time.NewTicker(keepaliveInterval)
+		defer ticker.Stop()
+		keepalive = ticker.C
+		events := make(chan openAIPassthroughReadEvent, 1)
+		readDone := make(chan struct{})
+		stopRead := make(chan struct{})
+		readEvents = events
+		go func() {
+			defer close(readDone)
+			defer close(events)
+			for documentScanner.Scan() {
+				select {
+				case events <- openAIPassthroughReadEvent{line: documentScanner.Text()}:
+				case <-stopRead:
+					return
+				}
+			}
+			select {
+			case events <- openAIPassthroughReadEvent{err: documentScanner.Err(), done: true}:
+			case <-stopRead:
+			}
+		}()
+		defer func() {
+			close(stopRead)
+			_ = resp.Body.Close()
+			<-readDone
+		}()
+	}
+	var scanErr error
+	nextLine := func() (string, bool) {
+		if readEvents == nil {
+			if documentScanner.Scan() {
+				return documentScanner.Text(), true
+			}
+			scanErr = documentScanner.Err()
+			return "", false
+		}
+		for {
+			select {
+			case ev, ok := <-readEvents:
+				if !ok || ev.done {
+					scanErr = ev.err
+					return "", false
+				}
+				return ev.line, true
+			case <-keepalive:
+				if clientOutputStarted || clientDisconnected || failureDelivered {
+					continue
+				}
+				commitHeaders()
+				n, err := w.Write([]byte(": keepalive\n\n"))
+				recordOpenAIStreamKeepaliveBytes(c, n)
+				if err != nil {
+					clientDisconnected = true
+					continue
+				}
+				flusher.Flush()
+			}
+		}
+	}
+	for {
+		line, ok := nextLine()
+		if !ok {
+			break
+		}
 		if eventType, ok := extractOpenAISSEEventLine(line); ok {
 			pendingSSEEventType = eventType
 			eventType = strings.TrimSpace(eventType)
@@ -2093,7 +2184,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 						UpstreamOutTok: usage.OutputTokens,
 					})
 				}
-				outputStarted := openAIStreamClientOutputStarted(c, clientOutputStarted)
+				outputStarted := openAIStreamClientOutputStarted(c, clientOutputStarted) || OpenAIForwardAttemptLocked(c)
 				if !outputStarted && !cyberHit {
 					if compactErr := newOpenAICompactFallbackSignal(c, dataBytes, failedMessage); compactErr != nil {
 						return resultWithUsage(), compactErr
@@ -2203,11 +2294,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 				pendingLines = append(pendingLines, line)
 				continue
 			}
-			// 真实输出开始，心跳的使命结束。停拍是幂等的，且会与心跳 goroutine
-			// 建立 happens-before —— 之后 ResponseWriter 由本循环独占。
-			if !clientOutputStarted {
-				stopKeepalive()
-			}
+			commitHeaders()
 			if !clientOutputStarted && len(pendingLines) > 0 {
 				if !writePendingLines() {
 					continue
@@ -2238,7 +2325,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 		}
 	}
 	ensureResponseFailedTerminal()
-	if err := documentScanner.Err(); err != nil {
+	if err := scanErr; err != nil {
 		if (sawDone || sawTerminalEvent) && !sawFailedEvent {
 			s.clearOpenAIProxyStreamDisconnect(account)
 			return resultWithUsage(), nil

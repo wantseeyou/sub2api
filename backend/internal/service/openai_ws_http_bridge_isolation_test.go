@@ -237,8 +237,8 @@ func TestOpenAIWSHTTPBridgeSessionIsolationAcrossSameSessionHash(t *testing.T) {
 	require.ElementsMatch(t, []httpBridgeIsolationRequest{
 		{input: []string{"alpha"}},
 		{input: []string{"beta"}},
-		{input: []string{"alpha", "call_alpha", "alpha-result"}, state: "turn-alpha"},
-		{input: []string{"beta", "call_beta", "beta-result"}, state: "turn-beta"},
+		{input: []string{"alpha", "call_alpha", "alpha-result"}},
+		{input: []string{"beta", "call_beta", "beta-result"}},
 	}, requests)
 	gotState, ok := stateStore.GetSessionTurnState(groupID, seedHash)
 	require.True(t, ok)

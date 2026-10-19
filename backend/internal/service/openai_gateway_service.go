@@ -503,11 +503,12 @@ type OpenAIGatewayService struct {
 	openAIModelsCache                   openAIModelsCache
 	openaiCompatSessionResponses        sync.Map
 	openaiCompatAnthropicDigestSessions sync.Map
-	// openaiCodexTurnStateOrigins: 下游会话 seed → openAICodexTurnStateOrigin，
-	// 记录最近一次向该会话下发 x-codex-turn-state 的铸造账号，供出站守卫
-	// 剥离跨账号回带（openai_codex_turn_state.go）。
+	// openaiCodexTurnStateOrigins 按实际状态或续链标识的摘要保存交付来源，
+	// 校验账号、调用方、线程及回合边界；不保存原始状态。
 	openaiCodexTurnStateOrigins sync.Map
 	openaiCodexTurnStateWrites  atomic.Uint64
+	openaiCodexTurnStateMu      sync.Mutex // 保护来源记录容量与原子更新。
+	openaiCodexTurnStateCount   int        // 当前有界来源记录数量。
 }
 
 // NewOpenAIGatewayService creates a new OpenAIGatewayService
@@ -906,6 +907,11 @@ func (s *OpenAIGatewayService) writeOpenAIWSFallbackErrorResponse(c *gin.Context
 		return false
 	}
 	statusCode, errType, clientMessage, upstreamMessage, ok := resolveOpenAIWSFallbackErrorResponse(wsErr)
+	if OpenAIForwardAttemptLocked(c) {
+		statusCode, errType, ok = http.StatusBadGateway, "upstream_execution_unknown", true
+		clientMessage = "Upstream WebSocket execution could not be completed; the request was not replayed"
+		upstreamMessage = clientMessage
+	}
 	if !ok {
 		return false
 	}

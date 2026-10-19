@@ -35,26 +35,7 @@ const (
 // 父线程与全部子智能体共用同一个 session-id 头，只有线程标识能把它们区分开。
 // 优先级：thread-id 头 → x-codex-turn-metadata 头 → x-codex-window-id 头 → 请求体 client_metadata。
 func resolveOpenAIWSClientThreadID(c *gin.Context, body []byte) string {
-	if c != nil && c.Request != nil {
-		if id := strings.TrimSpace(c.GetHeader(openAIWSThreadIDHeader)); id != "" {
-			return id
-		}
-		if id := codexTurnMetadataThreadID(c.GetHeader(openAIWSTurnMetadataHeader)); id != "" {
-			return id
-		}
-		if window := strings.TrimSpace(c.GetHeader(openAIWSWindowIDHeader)); window != "" {
-			if id := strings.TrimSpace(strings.SplitN(window, ":", 2)[0]); id != "" {
-				return id
-			}
-		}
-	}
-	if len(body) == 0 {
-		return ""
-	}
-	if id := strings.TrimSpace(gjson.GetBytes(body, "client_metadata.thread_id").String()); id != "" {
-		return id
-	}
-	return codexTurnMetadataThreadID(gjson.GetBytes(body, "client_metadata."+openAIWSTurnMetadataHeader).String())
+	return parseCodexClientIdentity(c, body).threadID
 }
 
 // codexTurnMetadata 是 x-codex-turn-metadata JSON 里执行作用域用到的字段。

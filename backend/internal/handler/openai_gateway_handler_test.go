@@ -2667,7 +2667,7 @@ func TestOpenAIResponsesWebSocket_FailoverOnUpstreamUsageLimitEvent(t *testing.T
 	require.Equal(t, []int64{int64(9902)}, accountRepo.rateLimitedIDs)
 }
 
-func TestOpenAIResponsesWebSocket_FirstOutputTimeoutWithoutDownstreamReusesClientForOneFailover(t *testing.T) {
+func TestOpenAIResponsesWebSocket_FirstOutputTimeoutDoesNotReplayOnAnotherAccount(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	firstHitCh := make(chan []byte, 1)
@@ -2837,40 +2837,32 @@ func TestOpenAIResponsesWebSocket_FirstOutputTimeoutWithoutDownstreamReusesClien
 	cancelWrite()
 	require.NoError(t, err)
 
-	var eventTypes []string
 	readCtx, cancelRead := context.WithTimeout(context.Background(), 6*time.Second)
-	for {
-		_, event, readErr := clientConn.Read(readCtx)
-		require.NoError(t, readErr)
-		eventType := gjson.GetBytes(event, "type").String()
-		eventTypes = append(eventTypes, eventType)
-		if eventType == "response.completed" {
-			require.Equal(t, "resp_ws_timeout_b", gjson.GetBytes(event, "response.id").String())
-			break
-		}
-	}
+	_, _, readErr := clientConn.Read(readCtx)
 	cancelRead()
-	require.Contains(t, eventTypes, "response.output_text.delta")
-	require.NoError(t, clientConn.Close(coderws.StatusNormalClosure, "done"))
+	var closeErr coderws.CloseError
+	require.ErrorAs(t, readErr, &closeErr)
+	require.Equal(t, coderws.StatusGoingAway, closeErr.Code)
+	require.Contains(t, closeErr.Reason, "not replayed")
 
 	select {
 	case <-handlerDone:
 	case <-time.After(3 * time.Second):
-		t.Fatal("websocket handler did not finish after healthy failover turn")
+		t.Fatal("websocket handler did not finish after uncertain upstream execution")
 	}
 	select {
 	case <-firstHitCh:
 	case <-time.After(3 * time.Second):
-		t.Fatal("first upstream did not receive replayable request")
+		t.Fatal("first upstream did not receive the request")
 	}
 	select {
 	case <-secondHitCh:
-	case <-time.After(3 * time.Second):
-		t.Fatal("second upstream did not receive replayed request")
+		t.Fatal("request was replayed on another account")
+	default:
 	}
 	require.Equal(t, int32(1), firstConnections.Load())
-	require.Equal(t, int32(1), secondConnections.Load())
-	require.NotContains(t, accountRepo.rateLimitedIDs, int64(9913), "healthy failover account must not be penalized")
+	require.Zero(t, secondConnections.Load())
+	require.NotContains(t, accountRepo.rateLimitedIDs, int64(9913), "unused account must not be penalized")
 }
 
 func runOpenAIResponsesWebSocketUsageLogCase(t *testing.T, tc openAIResponsesWSUsageLogCase) openAIResponsesWSUsageLogResult {

@@ -155,6 +155,7 @@ var duplicateAccountDiscardedExtraKeys = map[string]struct{}{
 }
 
 func duplicateAccountExtra(value map[string]any) (map[string]any, error) {
+	value = StripModelConsistencyExtra(value)
 	cloned, err := cloneAccountJSONMap(value)
 	if err != nil {
 		return nil, err

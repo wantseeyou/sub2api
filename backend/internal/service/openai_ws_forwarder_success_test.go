@@ -1106,7 +1106,7 @@ func TestOpenAIGatewayService_Forward_WSv2_CodexFingerprintHandshakeBodyParityAn
 	c.Request.Header.Set("User-Agent", "codex_cli_rs/0.144.1")
 	c.Request.Header.Set("originator", "codex_cli_rs")
 	c.Request.Header.Set("session-id", "header-session")
-	c.Request.Header.Set("x-codex-turn-metadata", `{"installation_id":"header-install","session_id":"header-session","thread_id":"header-thread","turn_id":"header-turn","window_id":"header-window","sandbox":"seatbelt"}`)
+	c.Request.Header.Set("x-codex-turn-metadata", `{"installation_id":"header-install","session_id":"header-session","thread_id":"header-thread","turn_id":"header-turn","window_id":"header-thread:7","turn_started_at_unix_ms":1770000000123,"sandbox":"seatbelt"}`)
 
 	cfg := &config.Config{}
 	cfg.Security.URLAllowlist.Enabled = false
@@ -1165,13 +1165,13 @@ func TestOpenAIGatewayService_Forward_WSv2_CodexFingerprintHandshakeBodyParityAn
 	require.Equal(t, wantSession, captureDialer.lastHeaders.Get("session_id"))
 	require.Equal(t, wantThread, captureDialer.lastHeaders.Get("thread-id"))
 	require.Equal(t, wantThread, captureDialer.lastHeaders.Get("x-client-request-id"))
-	require.Equal(t, wantThread+":0", captureDialer.lastHeaders.Get("x-codex-window-id"))
+	require.Equal(t, wantThread+":7", captureDialer.lastHeaders.Get("x-codex-window-id"))
 
 	require.Equal(t, wantSession, gjson.Get(payloadJSON, "prompt_cache_key").String())
 	require.Equal(t, wantInstall, gjson.Get(payloadJSON, "client_metadata.x-codex-installation-id").String())
 	require.Equal(t, wantSession, gjson.Get(payloadJSON, "client_metadata.session_id").String())
 	require.Equal(t, wantThread, gjson.Get(payloadJSON, "client_metadata.thread_id").String())
-	require.Equal(t, wantThread+":0", gjson.Get(payloadJSON, "client_metadata.x-codex-window-id").String())
+	require.Equal(t, wantThread+":7", gjson.Get(payloadJSON, "client_metadata.x-codex-window-id").String())
 
 	bodyTurnMetadata := gjson.Get(payloadJSON, "client_metadata.x-codex-turn-metadata").String()
 	headerTurnMetadata := captureDialer.lastHeaders.Get("x-codex-turn-metadata")
@@ -1398,7 +1398,8 @@ func TestOpenAIGatewayService_Forward_WSv2_TurnStateAndMetadataReplayOnReconnect
 	c1, _ := gin.CreateTestContext(rec1)
 	c1.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
 	c1.Request.Header.Set("session_id", "session_turn_state")
-	c1.Request.Header.Set("x-codex-turn-metadata", "turn_meta_1")
+	c1.Set("api_key", &APIKey{ID: 77})
+	c1.Request.Header.Set("x-codex-turn-metadata", `{"thread_id":"thread-1","turn_id":"turn-1","attempt":1}`)
 	result1, err := svc.Forward(context.Background(), c1, account, reqBody)
 	require.NoError(t, err)
 	require.NotNil(t, result1)
@@ -1420,15 +1421,16 @@ func TestOpenAIGatewayService_Forward_WSv2_TurnStateAndMetadataReplayOnReconnect
 	c2, _ := gin.CreateTestContext(rec2)
 	c2.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
 	c2.Request.Header.Set("session_id", "session_turn_state")
-	c2.Request.Header.Set("x-codex-turn-metadata", "turn_meta_2")
+	c2.Set("api_key", &APIKey{ID: 77})
+	c2.Request.Header.Set("x-codex-turn-metadata", `{"thread_id":"thread-1","turn_id":"turn-1","attempt":2}`)
 	result2, err := svc.Forward(context.Background(), c2, account, reqBody)
 	require.NoError(t, err)
 	require.NotNil(t, result2)
 
 	firstHandshakeHeaders := <-headersCh
 	secondHandshakeHeaders := <-headersCh
-	require.Equal(t, "turn_meta_1", firstHandshakeHeaders.Get("X-Codex-Turn-Metadata"))
-	require.Equal(t, "turn_meta_2", secondHandshakeHeaders.Get("X-Codex-Turn-Metadata"))
+	require.Equal(t, c1.GetHeader("X-Codex-Turn-Metadata"), firstHandshakeHeaders.Get("X-Codex-Turn-Metadata"))
+	require.Equal(t, c2.GetHeader("X-Codex-Turn-Metadata"), secondHandshakeHeaders.Get("X-Codex-Turn-Metadata"))
 	require.Equal(t, "turn_state_first", secondHandshakeHeaders.Get("X-Codex-Turn-State"))
 }
 

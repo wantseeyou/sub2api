@@ -820,12 +820,19 @@ func TestPassthroughLifecycle_FirstOutputTimeoutRemainsBounded(t *testing.T) {
 	clientConn := dialPassthroughLifecycleClient(t, server)
 	defer func() { _ = clientConn.CloseNow() }()
 
+	_, err := readPassthroughLifecycleFrame(t, clientConn, 2500*time.Millisecond)
+	var websocketCloseErr coderws.CloseError
+	require.ErrorAs(t, err, &websocketCloseErr)
+	require.Equal(t, coderws.StatusGoingAway, websocketCloseErr.Code)
+	require.Contains(t, websocketCloseErr.Reason, "not replayed")
 	select {
 	case err := <-serverErr:
 		var failoverErr *UpstreamFailoverError
-		require.ErrorAs(t, err, &failoverErr)
-		require.Equal(t, http.StatusGatewayTimeout, failoverErr.StatusCode)
-		require.Contains(t, string(failoverErr.ResponseBody), "first_output_timeout")
+		require.NotErrorAs(t, err, &failoverErr)
+		var closeErr *OpenAIWSClientCloseError
+		require.ErrorAs(t, err, &closeErr)
+		require.Equal(t, coderws.StatusGoingAway, closeErr.StatusCode())
+		require.Contains(t, closeErr.Reason(), "not replayed")
 	case <-time.After(2500 * time.Millisecond):
 		t.Fatal("passthrough first output was left unbounded")
 	}
@@ -849,7 +856,7 @@ func TestPassthroughLifecycle_ResponseCreatedTimeoutClosesWithoutFailover(t *tes
 	var websocketCloseErr coderws.CloseError
 	require.ErrorAs(t, err, &websocketCloseErr)
 	require.Equal(t, coderws.StatusGoingAway, websocketCloseErr.Code)
-	require.Equal(t, "upstream produced no semantic output; please reconnect", websocketCloseErr.Reason)
+	require.Equal(t, "upstream produced no semantic output; execution uncertain; request was not replayed", websocketCloseErr.Reason)
 	select {
 	case err := <-serverErr:
 		var failoverErr *UpstreamFailoverError
@@ -857,7 +864,7 @@ func TestPassthroughLifecycle_ResponseCreatedTimeoutClosesWithoutFailover(t *tes
 		var closeErr *OpenAIWSClientCloseError
 		require.ErrorAs(t, err, &closeErr)
 		require.Equal(t, coderws.StatusGoingAway, closeErr.StatusCode())
-		require.Equal(t, "upstream produced no semantic output; please reconnect", closeErr.Reason())
+		require.Equal(t, "upstream produced no semantic output; execution uncertain; request was not replayed", closeErr.Reason())
 	case <-time.After(2500 * time.Millisecond):
 		t.Fatal("response.created timeout did not close the passthrough connection")
 	}
@@ -890,7 +897,7 @@ func TestPassthroughLifecycle_SecondTurnTimeoutIsNotFailoverSafe(t *testing.T) {
 	var websocketCloseErr coderws.CloseError
 	require.ErrorAs(t, err, &websocketCloseErr)
 	require.Equal(t, coderws.StatusGoingAway, websocketCloseErr.Code)
-	require.Equal(t, "upstream produced no semantic output; please reconnect", websocketCloseErr.Reason)
+	require.Equal(t, "upstream produced no semantic output; execution uncertain; request was not replayed", websocketCloseErr.Reason)
 	select {
 	case err := <-serverErr:
 		var failoverErr *UpstreamFailoverError

@@ -690,7 +690,7 @@ func (s *OpenAIGatewayService) proxyOpenAIWSHTTPBridgeTurn(
 			Duration:                      time.Since(turnStart),
 			FirstTokenMs:                  firstTokenMs,
 		}
-		if replayInput := replayCollector.Items(); len(replayInput) > 0 {
+		if replayInput := replayCollector.AllItems(); len(replayInput) > 0 {
 			result.wsReplayInput = replayInput
 			result.wsReplayInputExists = true
 		}

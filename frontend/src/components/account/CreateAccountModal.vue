@@ -3346,6 +3346,12 @@
         </div>
       </div>
 
+      <CodexAdvancedSettings
+        v-if="form.platform === 'openai' && accountCategory === 'oauth-based' && oauthFlowRef?.inputMethod !== 'agent_identity'"
+        v-model:http-to-ws="openaiHttpToWsEnabled"
+        v-model:thread-isolation="codexThreadIsolationEnabled"
+      />
+
       <!-- OpenAI WS Mode 三态（off/ctx_pool/passthrough） -->
       <div
         v-if="form.platform === 'openai' && (accountCategory === 'oauth-based' || accountCategory === 'apikey')"
@@ -4162,6 +4168,7 @@ import GroupSelector from '@/components/common/GroupSelector.vue'
 import ModelWhitelistSelector from '@/components/account/ModelWhitelistSelector.vue'
 import QuotaLimitCard from '@/components/account/QuotaLimitCard.vue'
 import Toggle from '@/components/common/Toggle.vue'
+import CodexAdvancedSettings from './CodexAdvancedSettings.vue'
 import GrokBaseUrlPresets from '@/components/account/GrokBaseUrlPresets.vue'
 import CnBaseUrlPresets from '@/components/account/CnBaseUrlPresets.vue'
 import { applyExplicitCacheUpstreamCredentials, isOfficialGeminiBaseUrl } from '@/utils/geminiExplicitCache'
@@ -4711,6 +4718,8 @@ const openAIImagesUrlToB64JsonEnabled = ref(false)
 const openAIEndpointCapabilities = ref<OpenAIEndpointCapability[]>(['chat_completions', 'embeddings'])
 const openaiOAuthResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
 const openaiAPIKeyResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
+const openaiHttpToWsEnabled = ref(false)
+const codexThreadIsolationEnabled = ref(false)
 const codexCLIOnlyEnabled = ref(false)
 const codexCLIOnlyAppServerEnabled = ref(false)
 type CodexFingerprintMode = 'off' | 'device' | 'session' | 'full'
@@ -5677,6 +5686,8 @@ const resetForm = () => {
   openaiAPIKeyResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
   codexCLIOnlyEnabled.value = false
   codexCLIOnlyAppServerEnabled.value = false
+  openaiHttpToWsEnabled.value = false
+  codexThreadIsolationEnabled.value = false
   codexFingerprintMode.value = 'off'
   anthropicPassthroughEnabled.value = false
   anthropicAPIKeyAuthScheme.value = 'x_api_key'
@@ -5761,6 +5772,10 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
     extra.openai_responses_flatten_namespaces = true
   } else {
     delete extra.openai_responses_flatten_namespaces
+  }
+  if (accountCategory.value === 'oauth-based' && oauthFlowRef.value?.inputMethod !== 'agent_identity') {
+    extra.openai_http_to_ws_enabled = openaiHttpToWsEnabled.value
+    extra.codex_thread_isolation_enabled = codexThreadIsolationEnabled.value
   }
   extra.openai_long_context_billing_enabled = openAILongContextBillingEnabled.value
 

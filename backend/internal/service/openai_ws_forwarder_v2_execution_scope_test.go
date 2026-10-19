@@ -184,7 +184,7 @@ func TestOpenAIGatewayService_Forward_WSv2_ExecutionScopeUsesOriginalIdentity(t 
 	_, boundA := stateStore.GetSessionTurnState(groupID, scopeA)
 	require.True(t, boundA, "会话 A 的 turn state 应落在按原始 session_id 算出的作用域")
 	_, boundB := stateStore.GetSessionTurnState(groupID, scopeB)
-	require.True(t, boundB, "会话 B 的 turn state 应落在按原始 session_id 算出的作用域")
+	require.False(t, boundB, "复用连接的旧握手状态不能交付或绑定到会话 B")
 
 	injected := resolveCodexFingerprintIDs(account, "", codexFingerprintFull)
 	require.NotNil(t, injected)
@@ -197,5 +197,5 @@ func TestOpenAIGatewayService_Forward_WSv2_ExecutionScopeUsesOriginalIdentity(t 
 	scopeC, threadC := resolveOpenAIWSExecutionScope(cC, rawC, apiKeyID)
 	require.Equal(t, "child-thread", threadC)
 	_, boundC := stateStore.GetSessionTurnState(groupID, scopeC)
-	require.True(t, boundC, "客户端自带线程标识时，键必须与按原始报文算出的一致，不受账号 namespace 改写影响")
+	require.False(t, boundC, "复用连接的旧握手状态不能绑定到另一原始线程")
 }

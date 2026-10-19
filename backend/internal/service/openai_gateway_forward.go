@@ -18,7 +18,18 @@ import (
 )
 
 // Forward forwards request to OpenAI API
-func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (*OpenAIForwardResult, error) {
+func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (result *OpenAIForwardResult, resultErr error) {
+	fpIDs := resolveCodexFingerprintIDsForRequest(c, account, body)
+	stageCodexFingerprintIDs(c, nil)
+	if err := s.guardCodexIdentityContinuation(c, account, body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": err.Error()}})
+		return nil, err
+	}
+	defer func() {
+		if resultErr == nil && result != nil && c.Writer.Written() {
+			s.noteCodexResponseIdentity(c, account, result.ResponseID)
+		}
+	}()
 	beginUpstreamResponseModelObservation(c)
 	ClearActualOpenAIUpstreamEndpoint(c)
 	if shouldForwardOpenAIResponsesViaRawChatCompletions(account) {
@@ -115,9 +126,10 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			body = liteBody
 		}
 	}
-	wsDecision := s.getOpenAIWSProtocolResolver().Resolve(account)
-	// 仅允许 WS 入站请求走 WS 上游，避免出现 HTTP -> WS 协议混用。
-	wsDecision = resolveOpenAIWSDecisionByClientTransport(wsDecision, GetOpenAIClientTransport(c))
+	wsDecision := s.resolveOpenAIForwardTransport(c, account)
+	if GetOpenAIClientTransport(c) != OpenAIClientTransportWS && gjson.GetBytes(body, "background").Bool() {
+		wsDecision = openAIWSHTTPDecision("background_requires_http")
+	}
 	passthroughEnabled := account.IsOpenAIPassthroughEnabled()
 	compactPath := isOpenAIResponsesCompactPath(c)
 	if shouldFlattenOpenAIResponsesNamespaces(account, wsDecision.Transport, passthroughEnabled, compactPath) {
@@ -552,11 +564,6 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		// 指纹收敛：一次性解析收敛 ID，请求体和出站头共享同一份 IDs（保证 turn_id 等随机字段一致）。
 		// fingerprintIDs 在此处解析，后续 buildUpstreamRequest 中使用同一份。
 		if !isCompactRequest {
-			var clientHeaders http.Header
-			if c != nil && c.Request != nil {
-				clientHeaders = c.Request.Header
-			}
-			fpIDs := resolveCodexFingerprintIDsFromRequest(account, clientHeaders)
 			if fpIDs != nil {
 				if applyCodexFingerprintClientMetadata(decoded, fpIDs) {
 					markDecodedModified()
@@ -811,40 +818,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		var wsErr error
 		wsLastFailureReason := ""
 		agentTaskRecoveryTried := false
-		wsPrevResponseRecoveryTried := false
 		wsInvalidEncryptedContentRecoveryTried := false
-		recoverPrevResponseNotFound := func(attempt int) bool {
-			if wsPrevResponseRecoveryTried {
-				return false
-			}
-			previousResponseID := openAIWSPayloadString(wsReqBody, "previous_response_id")
-			if previousResponseID == "" {
-				logOpenAIWSModeInfo(
-					"reconnect_prev_response_recovery_skip account_id=%d attempt=%d reason=missing_previous_response_id previous_response_id_present=false",
-					account.ID,
-					attempt,
-				)
-				return false
-			}
-			if HasFunctionCallOutput(wsReqBody) {
-				logOpenAIWSModeInfo(
-					"reconnect_prev_response_recovery_skip account_id=%d attempt=%d reason=has_function_call_output previous_response_id_present=true",
-					account.ID,
-					attempt,
-				)
-				return false
-			}
-			delete(wsReqBody, "previous_response_id")
-			wsPrevResponseRecoveryTried = true
-			logOpenAIWSModeInfo(
-				"reconnect_prev_response_recovery account_id=%d attempt=%d action=drop_previous_response_id retry=1 previous_response_id=%s previous_response_id_kind=%s",
-				account.ID,
-				attempt,
-				truncateOpenAIWSLogValue(previousResponseID, openAIWSIDValueMaxLen),
-				normalizeOpenAIWSLogValue(ClassifyOpenAIPreviousResponseIDKind(previousResponseID)),
-			)
-			return true
-		}
 		recoverInvalidEncryptedContent := func(attempt int) bool {
 			if wsInvalidEncryptedContentRecoveryTried {
 				return false
@@ -870,9 +844,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			}
 			previousResponseID := openAIWSPayloadString(wsReqBody, "previous_response_id")
 			hasFunctionCallOutput := HasFunctionCallOutput(wsReqBody)
-			if previousResponseID != "" && !hasFunctionCallOutput {
-				delete(wsReqBody, "previous_response_id")
-			}
+			// 明确拒绝允许纠正密文，但续链锚点必须保留。
 			wsInvalidEncryptedContentRecoveryTried = true
 			logOpenAIWSModeInfo(
 				"reconnect_invalid_encrypted_content_recovery account_id=%d attempt=%d action=drop_encrypted_reasoning_items retry=1 previous_response_id_present=%v previous_response_id=%s previous_response_id_kind=%s has_function_call_output=%v dropped_previous_response_id=%v",
@@ -882,7 +854,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 				truncateOpenAIWSLogValue(previousResponseID, openAIWSIDValueMaxLen),
 				normalizeOpenAIWSLogValue(ClassifyOpenAIPreviousResponseIDKind(previousResponseID)),
 				hasFunctionCallOutput,
-				previousResponseID != "" && !hasFunctionCallOutput,
+				false,
 			)
 			return true
 		}
@@ -912,7 +884,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			if wsErr == nil {
 				break
 			}
-			if c != nil && c.Writer != nil && c.Writer.Written() {
+			if OpenAIForwardAttemptLocked(c) || (c != nil && c.Writer != nil && c.Writer.Written()) {
 				break
 			}
 			var taskRecoveredErr *agentIdentityTaskRecoveredError
@@ -924,11 +896,7 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			if reason != "" {
 				wsLastFailureReason = reason
 			}
-			// previous_response_not_found 说明续链锚点不可用：
-			// 对非 function_call_output 场景，允许一次“去掉 previous_response_id 后重放”。
-			if reason == "previous_response_not_found" && recoverPrevResponseNotFound(attempt) {
-				continue
-			}
+			// HTTP 入站没有完整历史证明；续链失效不能通过删除锚点重放。
 			if reason == "invalid_encrypted_content" && recoverInvalidEncryptedContent(attempt) {
 				continue
 			}

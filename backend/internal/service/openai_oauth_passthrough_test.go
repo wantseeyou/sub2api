@@ -2133,7 +2133,7 @@ func TestOpenAIGatewayService_CodexFingerprintHTTPTransformedHeaderBodyParityAnd
 	c.Request.Header.Set("User-Agent", "codex_cli_rs/0.144.1")
 	c.Request.Header.Set("originator", "codex_cli_rs")
 	c.Request.Header.Set("session-id", "header-session")
-	c.Request.Header.Set("x-codex-turn-metadata", `{"installation_id":"header-install","session_id":"header-session","thread_id":"header-thread","turn_id":"header-turn","window_id":"header-window","sandbox":"seatbelt"}`)
+	c.Request.Header.Set("x-codex-turn-metadata", `{"installation_id":"header-install","session_id":"header-session","thread_id":"header-thread","turn_id":"header-turn","window_id":"header-thread:7","turn_started_at_unix_ms":1770000000123,"sandbox":"seatbelt"}`)
 
 	body := []byte(`{"model":"gpt-5.2","stream":false,"prompt_cache_key":"body-session","client_metadata":{"session_id":"body-session","x-codex-turn-metadata":"{\"installation_id\":\"body-install\",\"session_id\":\"body-session\",\"thread_id\":\"body-thread\",\"turn_id\":\"body-turn\",\"window_id\":\"body-window\",\"sandbox\":\"seatbelt\"}"},"input":[{"type":"message","role":"user","content":"hi"}]}`)
 
@@ -2169,13 +2169,13 @@ func TestOpenAIGatewayService_CodexFingerprintHTTPTransformedHeaderBodyParityAnd
 	require.Equal(t, wantSession, upstream.lastReq.Header.Get("session_id"))
 	require.Equal(t, wantThread, upstream.lastReq.Header.Get("thread-id"))
 	require.Equal(t, wantThread, upstream.lastReq.Header.Get("x-client-request-id"))
-	require.Equal(t, wantThread+":0", upstream.lastReq.Header.Get("x-codex-window-id"))
+	require.Equal(t, wantThread+":7", upstream.lastReq.Header.Get("x-codex-window-id"))
 
 	require.Equal(t, wantSession, gjson.GetBytes(upstream.lastBody, "prompt_cache_key").String())
 	require.Equal(t, wantInstall, gjson.GetBytes(upstream.lastBody, "client_metadata.x-codex-installation-id").String())
 	require.Equal(t, wantSession, gjson.GetBytes(upstream.lastBody, "client_metadata.session_id").String())
 	require.Equal(t, wantThread, gjson.GetBytes(upstream.lastBody, "client_metadata.thread_id").String())
-	require.Equal(t, wantThread+":0", gjson.GetBytes(upstream.lastBody, "client_metadata.x-codex-window-id").String())
+	require.Equal(t, wantThread+":7", gjson.GetBytes(upstream.lastBody, "client_metadata.x-codex-window-id").String())
 
 	bodyTurnMetadata := gjson.GetBytes(upstream.lastBody, "client_metadata.x-codex-turn-metadata").String()
 	headerTurnMetadata := upstream.lastReq.Header.Get("x-codex-turn-metadata")
@@ -2193,7 +2193,7 @@ func TestOpenAIGatewayService_CodexFingerprintHTTPRawPassthroughHeaderBodyParity
 	c.Request.Header.Set("User-Agent", "codex_cli_rs/0.144.1")
 	c.Request.Header.Set("originator", "codex_cli_rs")
 	c.Request.Header.Set("session-id", "header-session")
-	c.Request.Header.Set("x-codex-turn-metadata", `{"installation_id":"header-install","session_id":"header-session","thread_id":"header-thread","turn_id":"header-turn","window_id":"header-window","sandbox":"seatbelt"}`)
+	c.Request.Header.Set("x-codex-turn-metadata", `{"installation_id":"header-install","session_id":"header-session","thread_id":"header-thread","turn_id":"header-turn","window_id":"header-thread:7","turn_started_at_unix_ms":1770000000123,"sandbox":"seatbelt"}`)
 
 	body := []byte(`{"model":"gpt-5.6-sol","stream":false,"prompt_cache_key":"body-session","client_metadata":{"session_id":"body-session","x-codex-turn-metadata":"{\"installation_id\":\"body-install\",\"session_id\":\"body-session\",\"thread_id\":\"body-thread\",\"turn_id\":\"body-turn\",\"window_id\":\"body-window\",\"sandbox\":\"seatbelt\"}"},"input":[{"type":"message","role":"user","content":"hi"}]}`)
 
@@ -2231,13 +2231,13 @@ func TestOpenAIGatewayService_CodexFingerprintHTTPRawPassthroughHeaderBodyParity
 	require.Equal(t, wantSession, upstream.lastReq.Header.Get("session_id"))
 	require.Equal(t, wantThread, upstream.lastReq.Header.Get("thread-id"))
 	require.Equal(t, wantThread, upstream.lastReq.Header.Get("x-client-request-id"))
-	require.Equal(t, wantThread+":0", upstream.lastReq.Header.Get("x-codex-window-id"))
+	require.Equal(t, wantThread+":7", upstream.lastReq.Header.Get("x-codex-window-id"))
 
 	require.Equal(t, wantSession, gjson.GetBytes(upstream.lastBody, "prompt_cache_key").String())
 	require.Equal(t, wantInstall, gjson.GetBytes(upstream.lastBody, "client_metadata.x-codex-installation-id").String())
 	require.Equal(t, wantSession, gjson.GetBytes(upstream.lastBody, "client_metadata.session_id").String())
 	require.Equal(t, wantThread, gjson.GetBytes(upstream.lastBody, "client_metadata.thread_id").String())
-	require.Equal(t, wantThread+":0", gjson.GetBytes(upstream.lastBody, "client_metadata.x-codex-window-id").String())
+	require.Equal(t, wantThread+":7", gjson.GetBytes(upstream.lastBody, "client_metadata.x-codex-window-id").String())
 
 	bodyTurnMetadata := gjson.GetBytes(upstream.lastBody, "client_metadata.x-codex-turn-metadata").String()
 	headerTurnMetadata := upstream.lastReq.Header.Get("x-codex-turn-metadata")

@@ -157,7 +157,7 @@ func TestOpenAIWSv2RejectsMalformedEventAfterWritingDownstream(t *testing.T) {
 	require.Contains(t, recorder.Body.String(), `"delta":"ok"`)
 	require.NotContains(t, recorder.Body.String(), "unexpected-tail")
 	require.NotContains(t, recorder.Body.String(), "response.in_progress")
-	assertOpenAISSEFrames(t, recorder.Body.String(), []string{"response.output_text.delta"})
+	assertOpenAISSEFrames(t, recorder.Body.String(), []string{"response.output_text.delta", "response.failed"})
 }
 
 func testOpenAIWSv2RejectsMalformedEventBeforeWritingDownstream(t *testing.T, malformedMessage []byte) {
@@ -218,7 +218,9 @@ func testOpenAIWSv2RejectsMalformedEventBeforeWritingDownstream(t *testing.T, ma
 	require.ErrorAs(t, err, &fallbackErr)
 	require.Equal(t, "invalid_event_json", fallbackErr.Reason)
 	require.Nil(t, result)
-	require.Empty(t, recorder.Body.String())
+	require.Equal(t, http.StatusBadGateway, recorder.Code)
+	require.Contains(t, recorder.Body.String(), `"type":"upstream_execution_unknown"`)
+	require.True(t, OpenAIForwardAttemptLocked(c))
 	require.True(t, captureConn.closed)
 }
 

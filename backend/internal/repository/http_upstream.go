@@ -300,7 +300,17 @@ func (s *httpUpstreamService) DoWithTLS(req *http.Request, proxyURL string, acco
 // caller's context (which may be detached for billing or reused for retries).
 func doUpstreamRequest(client *http.Client, req *http.Request) (*http.Response, error) {
 	ctx, cancel := context.WithCancel(req.Context())
-	resp, err := servertiming.Do(client, req.WithContext(ctx))
+	wire, compressed, err := compressOpenAICodexRequest(req.WithContext(ctx))
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	if wire.URL != nil && strings.EqualFold(wire.URL.Hostname(), "chatgpt.com") && wire.URL.Path == "/backend-api/codex/responses" {
+		slog.DebugContext(ctx, "codex_http_transport", "transport", "http", "compressed", compressed,
+			"request_bytes", req.ContentLength, "sent_bytes", wire.ContentLength,
+			"has_thread", wire.Header.Get("thread-id") != "", "has_turn_metadata", wire.Header.Get("x-codex-turn-metadata") != "")
+	}
+	resp, err := servertiming.Do(client, wire)
 	if err != nil {
 		cancel()
 		return resp, err
