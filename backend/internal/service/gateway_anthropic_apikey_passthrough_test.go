@@ -950,7 +950,7 @@ func TestGatewayService_AnthropicOAuthMimic_RewritesSystemWithBillingBlock(t *te
 			}
 
 			if tt.wantMetadataUserID != "" {
-				require.Equal(t, tt.wantMetadataUserID, gjson.GetBytes(upstream.lastBody, "metadata.user_id").String())
+				require.False(t, gjson.GetBytes(upstream.lastBody, "metadata").Exists(), "未装配身份服务时省略 metadata，不能回退透传客户端身份")
 				require.True(t, gjson.GetBytes(upstream.lastBody, "context_management").Exists())
 			}
 		})
@@ -1005,13 +1005,15 @@ func TestGatewayService_AnthropicOAuthRealClaudeCodeHaiku_PreservesClientHeaders
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.NotNil(t, upstream.lastReq)
-	require.Equal(t, c.Request.Header.Get("User-Agent"), getHeaderRaw(upstream.lastReq.Header, "User-Agent"))
-	require.Equal(t, "real-client-package", getHeaderRaw(upstream.lastReq.Header, "X-Stainless-Package-Version"))
+	// 环境头和请求标识由网关生成，客户端 beta 和业务正文仍保持原行为。
+	for key, value := range claude.DefaultHeaders() {
+		require.Equal(t, value, getHeaderRaw(upstream.lastReq.Header, key), "fixed environment header %s", key)
+	}
 	require.Equal(t, clientBeta, getHeaderRaw(upstream.lastReq.Header, "anthropic-beta"))
-	require.Empty(t, getHeaderRaw(upstream.lastReq.Header, "x-client-request-id"), "真实 CC 不应被强制写入 mimic request id")
+	require.Regexp(t, `^[a-f0-9-]{36}$`, getHeaderRaw(upstream.lastReq.Header, "x-client-request-id"))
 	require.Equal(t, gjson.GetBytes(body, "system").Raw, gjson.GetBytes(upstream.lastBody, "system").Raw)
 	require.Equal(t, gjson.GetBytes(body, "messages").Raw, gjson.GetBytes(upstream.lastBody, "messages").Raw)
-	require.Equal(t, metadataUserID, gjson.GetBytes(upstream.lastBody, "metadata.user_id").String())
+	require.False(t, gjson.GetBytes(upstream.lastBody, "metadata").Exists(), "未装配身份服务时也不能泄漏原始身份")
 	require.True(t, gjson.GetBytes(upstream.lastBody, "context_management").Exists())
 	require.NotContains(t, string(upstream.lastBody), "x-anthropic-billing-header:")
 }

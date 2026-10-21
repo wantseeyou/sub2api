@@ -10,38 +10,24 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 )
 
-// floorClaudeCLIUserAgentVersion 单元测试：版本下限抬升的各种形态。
-func TestFloorClaudeCLIUserAgentVersion(t *testing.T) {
-	floorUA := "claude-cli/" + claude.CLICurrentVersion
-	cases := []struct {
-		name        string
-		ua          string
-		want        string
-		wantChanged bool
-	}{
-		// 线上故障形态：历史版本低于 CLICurrentVersion，就地抬到下限。
-		{"old_version_upgraded", "claude-cli/2.1.220 (external, cli)", floorUA + " (external, cli)", true},
-		// 只替换版本号段，括号内的真实客户端形态原样保留。
-		{"old_version_with_desktop_3p_suffix",
-			"claude-cli/2.1.100 (external, claude-desktop-3p, agent-sdk/0.3.100)",
-			floorUA + " (external, claude-desktop-3p, agent-sdk/0.3.100)", true},
-		// 等于下限：不得改动。
-		{"equal_to_floor", floorUA + " (external, cli)", floorUA + " (external, cli)", false},
-		// 高于下限：只升不降，不得把客户端上报的更新版本压回去。
-		{"newer_than_floor_not_downgraded", "claude-cli/2.9.0 (external, cli)", "claude-cli/2.9.0 (external, cli)", false},
-		// 非 claude-cli 产品：一律不动。
-		{"other_product_untouched", "opencode/1.2.3 (external, cli)", "opencode/1.2.3 (external, cli)", false},
-		// 空串 / 畸形：一律不动。
-		{"empty", "", "", false},
-		{"no_version", "claude-cli (external, cli)", "claude-cli (external, cli)", false},
-		{"unparseable_version", "claude-cli/abc (external, cli)", "claude-cli/abc (external, cli)", false},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got, changed := floorClaudeCLIUserAgentVersion(tc.ua)
-			require.Equal(t, tc.want, got)
-			require.Equal(t, tc.wantChanged, changed)
+// 旧版本、超前版本、其他产品及畸形缓存均迁移到同一固定环境。
+func TestGetOrCreateFingerprintPinsCachedUserAgent(t *testing.T) {
+	for _, ua := range []string{
+		"claude-cli/2.1.220 (external, cli)",
+		"claude-cli/2.1.100 (external, claude-desktop-3p, agent-sdk/0.3.100)",
+		claude.DefaultUserAgent(),
+		"claude-cli/2.9.0 (external, cli)",
+		"opencode/1.2.3 (external, cli)",
+		"",
+		"claude-cli (external, cli)",
+		"claude-cli/abc (external, cli)",
+	} {
+		t.Run(ua, func(t *testing.T) {
+			cache := &stubIdentityCache{fingerprint: &Fingerprint{UserAgent: ua, ClientID: "cid-1"}}
+			fp, err := NewIdentityService(cache).GetOrCreateFingerprint(context.Background(), 1, nil)
+			require.NoError(t, err)
+			require.Equal(t, claude.DefaultUserAgent(), fp.UserAgent)
+			require.Equal(t, "cid-1", fp.ClientID)
 		})
 	}
 }
@@ -69,12 +55,14 @@ func TestGetOrCreateFingerprintFloorsStaleCachedUserAgent(t *testing.T) {
 	require.Equal(t, "claude-cli/"+claude.CLICurrentVersion+" (external, cli)", fp.UserAgent)
 	require.Equal(t, 1, cache.setCalls, "下限抬升必须持久化写回缓存")
 	require.Equal(t, "claude-cli/"+claude.CLICurrentVersion+" (external, cli)", cache.lastSet.UserAgent)
-	// X-Stainless-* 维持既有 merge 语义：客户端未携带时保留缓存中的真实值，不被下限逻辑覆盖。
-	require.Equal(t, "0.91.1", fp.StainlessPackageVersion)
+	// 迁移时 SDK 与运行时一起更新，不拼接旧缓存环境。
+	require.Equal(t, "0.128.0", fp.StainlessPackageVersion)
+	require.Equal(t, "v26.3.0", fp.StainlessRuntimeVersion)
+	require.Equal(t, "cid-1", fp.ClientID)
 }
 
-// 缓存版本高于下限：不得被降级，也不得触发多余写入。
-func TestGetOrCreateFingerprintDoesNotTouchCacheAboveFloor(t *testing.T) {
+// 旧缓存中的超前版本也迁移到固定环境。
+func TestGetOrCreateFingerprintPinsCacheAboveBaseline(t *testing.T) {
 	ua := "claude-cli/2.9.0 (external, cli)"
 	cache := &stubIdentityCache{fingerprint: &Fingerprint{
 		UserAgent:               ua,
@@ -90,12 +78,12 @@ func TestGetOrCreateFingerprintDoesNotTouchCacheAboveFloor(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	require.Equal(t, ua, fp.UserAgent, "高于下限的缓存版本不得被降级")
-	require.Zero(t, cache.setCalls)
+	require.Equal(t, claude.DefaultUserAgent(), fp.UserAgent)
+	require.Equal(t, 1, cache.setCalls)
 }
 
-// 客户端送来高于下限的更新版本：常规升级照常生效，且不被下限压回。
-func TestGetOrCreateFingerprintClientNewerThanFloorStillWins(t *testing.T) {
+// 客户端送来更新版本也不能改变固定环境。
+func TestGetOrCreateFingerprintNewerClientCannotChangePin(t *testing.T) {
 	newUA := "claude-cli/2.9.0 (external, cli)"
 	cache := &stubIdentityCache{fingerprint: &Fingerprint{
 		UserAgent: "claude-cli/2.1.220 (external, cli)",
@@ -107,7 +95,7 @@ func TestGetOrCreateFingerprintClientNewerThanFloorStillWins(t *testing.T) {
 	fp, err := svc.GetOrCreateFingerprint(context.Background(), 1, headersWithUA(newUA))
 
 	require.NoError(t, err)
-	require.Equal(t, newUA, fp.UserAgent, "客户端更新版本优先于下限，不得被压回")
+	require.Equal(t, claude.DefaultUserAgent(), fp.UserAgent)
 	require.Equal(t, 1, cache.setCalls)
 }
 
@@ -141,6 +129,6 @@ func TestCreateFingerprintFromHeadersFloorsOldClientUserAgent(t *testing.T) {
 	)
 
 	require.NoError(t, err)
-	require.Equal(t, "claude-cli/"+claude.CLICurrentVersion+" (external, claude-desktop-3p)", fp.UserAgent)
+	require.Equal(t, claude.DefaultUserAgent(), fp.UserAgent)
 	require.Equal(t, 1, cache.setCalls)
 }

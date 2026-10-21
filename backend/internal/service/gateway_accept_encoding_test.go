@@ -47,8 +47,9 @@ func TestGatewayService_AcceptEncodingOnWire(t *testing.T) {
 				want     string
 			}{
 				{name: "gzip", encoding: "gzip", want: "gzip"},
-				{name: "multiple encodings", encoding: "gzip, deflate, br", want: "gzip, deflate, br"},
-				{name: "identity", encoding: "identity", want: "identity"},
+				// OAuth 的压缩协商由网关传输层生成，不采用客户端的环境偏好。
+				{name: "multiple encodings", encoding: "gzip, deflate, br", want: "gzip"},
+				{name: "identity", encoding: "identity", want: "gzip"},
 				{name: "omitted", want: "gzip"},
 			} {
 				t.Run(tc.name, func(t *testing.T) {

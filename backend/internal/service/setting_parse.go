@@ -868,7 +868,8 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	} else {
 		result.EnableFingerprintUnification = true // default: enabled (current behavior)
 	}
-	result.EnableMetadataPassthrough = settings[SettingKeyEnableMetadataPassthrough] == "true"
+	// 固定客户端始终重建身份，旧透传配置仅保留存储兼容。
+	result.EnableMetadataPassthrough = false
 	result.EnableCCHSigning = settings[SettingKeyEnableCCHSigning] == "true"
 	if v, ok := settings[SettingKeyEnableClaudeOAuthSystemPromptInjection]; ok && v != "" {
 		result.EnableClaudeOAuthSystemPromptInjection = v == "true"
@@ -883,11 +884,8 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	} else {
 		result.RewriteMessageCacheControl = s.defaultRewriteMessageCacheControl()
 	}
-	if v, ok := settings[SettingKeyEnableClientDatelineNormalization]; ok && v != "" {
-		result.EnableClientDatelineNormalization = v == "true"
-	} else {
-		result.EnableClientDatelineNormalization = true
-	}
+	// 最终出口始终按 UTC 处理自动日期，旧开关不再控制出站清洗。
+	result.EnableClientDatelineNormalization = true
 	result.AntigravityUserAgentVersion = antigravity.NormalizeUserAgentVersion(settings[SettingKeyAntigravityUserAgentVersion])
 	result.OpenAICodexUserAgent = strings.TrimSpace(settings[SettingKeyOpenAICodexUserAgent])
 	result.OpenAICodexClientVersion = NormalizeCodexClientVersion(settings[SettingKeyOpenAICodexClientVersion])

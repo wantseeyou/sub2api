@@ -17,6 +17,10 @@ func RegisterCommonRoutes(r *gin.Engine) {
 	r.POST("/api/event_logging/batch", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
+	// 新版客户端事件仅在请求到达本网关时丢弃；不影响客户端的独立网络出口。
+	r.POST("/api/event_logging/v2/batch", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
 
 	// Setup status endpoint (always returns needs_setup: false in normal mode)
 	// This is used by the frontend to detect when the service has restarted after setup

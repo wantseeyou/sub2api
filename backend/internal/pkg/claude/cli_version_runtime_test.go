@@ -25,15 +25,15 @@ func TestEffectiveCLIVersionDefaultsToCLIVersion(t *testing.T) {
 	}
 }
 
-// b. 注入返回更高版本的 resolver 后，DefaultHeaders()["User-Agent"] 跟随变化。
-func TestEffectiveCLIVersionFollowsResolver(t *testing.T) {
+// 解析器返回更高版本也不能改变固定出站配置。
+func TestEffectiveCLIVersionIgnoresNewerResolver(t *testing.T) {
 	const upgraded = "9.9.9"
 	withCLIVersionResolver(t, func() string { return upgraded })
 
-	if got := EffectiveCLIVersion(); got != upgraded {
-		t.Fatalf("EffectiveCLIVersion() = %q, want %q", got, upgraded)
+	if got := EffectiveCLIVersion(); got != CLICurrentVersion {
+		t.Fatalf("EffectiveCLIVersion() = %q, want %q", got, CLICurrentVersion)
 	}
-	wantUA := "claude-cli/" + upgraded + " (external, cli)"
+	wantUA := "claude-cli/" + CLICurrentVersion + " (external, cli)"
 	if got := DefaultHeaders()["User-Agent"]; got != wantUA {
 		t.Fatalf("DefaultHeaders()[User-Agent] = %q, want %q", got, wantUA)
 	}

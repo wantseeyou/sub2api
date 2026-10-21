@@ -166,6 +166,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	}
 
 	body := parsed.Body.Bytes()
+	captureClaudeBillingSource(c, body)
 	replaceBody := func(next []byte) error {
 		if err := parsed.ReplaceBody(next); err != nil {
 			return fmt.Errorf("rewrite request body: %w", err)
@@ -267,15 +268,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		}
 	}
 
-	// 客户端 dateline 归一化：仅对 Anthropic OAuth/SetupToken 账号生效。
-	// 抹除 "Today's date is …" 语句里可能被注入的隐写指纹（4 种撇号 × 2 种日期
-	// 分隔符），还原为 ASCII 撇号 + "-" 分隔符。运行在 mimicry 分支之外，
-	// 保证真实 Claude Code 客户端注入的指纹同样被清洗。
-	if next, ok := s.normalizeClientDatelineIfEnabled(ctx, account, body); ok {
-		if err := replaceBody(next); err != nil {
-			return nil, err
-		}
-	}
+	// 自动日期由最终出口按 UTC 处理；此处不再宽匹配用户引用中的日期文本。
 
 	// 强制执行 cache_control 块数量限制（最多 4 个）
 	if err := replaceBody(enforceCacheControlLimit(body)); err != nil {

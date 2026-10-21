@@ -12,6 +12,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -1468,10 +1469,10 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		req.OpenAICodexClientVersion = &normalized
 	}
 	if req.ClaudeCodeClientVersion != nil {
-		// 该值会被拼进出站 User-Agent 与 billing attribution，必须是合法版本号；空串表示跟随自动同步。
+		// 出站环境已固定；空值同样使用内置版本，不跟随自动同步升级。
 		normalized := strings.TrimSpace(*req.ClaudeCodeClientVersion)
 		if normalized != "" && service.NormalizeClaudeCodeClientVersion(normalized) == "" {
-			response.Error(c, http.StatusBadRequest, "claude_code_client_version must be empty or a valid version (e.g. 2.1.258)")
+			response.Error(c, http.StatusBadRequest, "claude_code_client_version must be empty or match the pinned version "+claude.CLICurrentVersion)
 			return
 		}
 		req.ClaudeCodeClientVersion = &normalized

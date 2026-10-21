@@ -5419,7 +5419,7 @@
                     }}
                   </p>
                 </div>
-                <Toggle v-model="form.enable_metadata_passthrough" />
+                <Toggle :model-value="false" disabled />
               </div>
 
               <!-- CCH Signing -->
@@ -5736,9 +5736,7 @@
                     }}
                   </p>
                 </div>
-                <Toggle
-                  v-model="form.enable_client_dateline_normalization"
-                />
+                <Toggle :model-value="true" disabled />
               </div>
 
               <!-- Antigravity UA 版本 -->
@@ -5875,7 +5873,7 @@
                   v-model="form.claude_code_client_version"
                   type="text"
                   class="input w-full font-mono text-sm"
-                  placeholder="2.1.280"
+                  placeholder="2.1.299"
                 />
                 <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
                   {{
@@ -11679,7 +11677,7 @@ async function saveSettings() {
       openai_ttft_mode:
         form.openai_ttft_mode === "visible" ? "visible" : "semantic",
       enable_fingerprint_unification: form.enable_fingerprint_unification,
-      enable_metadata_passthrough: form.enable_metadata_passthrough,
+      enable_metadata_passthrough: false,
       enable_cch_signing: form.enable_cch_signing,
       enable_claude_oauth_system_prompt_injection:
         form.enable_claude_oauth_system_prompt_injection,
@@ -11690,8 +11688,7 @@ async function saveSettings() {
       enable_anthropic_cache_ttl_1h_injection:
         form.enable_anthropic_cache_ttl_1h_injection,
       rewrite_message_cache_control: form.rewrite_message_cache_control,
-      enable_client_dateline_normalization:
-        form.enable_client_dateline_normalization,
+      enable_client_dateline_normalization: true,
       antigravity_user_agent_version:
         form.antigravity_user_agent_version?.trim() || "",
       openai_codex_user_agent:

@@ -65,7 +65,7 @@ func TestSyncBillingHeaderVersion(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := syncBillingHeaderVersion([]byte(tt.body), tt.userAgent)
+			result := syncBillingHeaderVersion([]byte(tt.body), tt.userAgent, nil)
 			if tt.unchanged {
 				assert.Equal(t, tt.body, string(result), "body should remain unchanged")
 			} else {
@@ -80,10 +80,10 @@ func TestSyncBillingHeaderVersion(t *testing.T) {
 func TestSyncBillingHeaderVersion_RecomputesSuffixAndIsIdempotent(t *testing.T) {
 	body := []byte(`{"system":[{"type":"text","text":"x-anthropic-billing-header: cc_version=2.1.81.df2; cc_entrypoint=cli;"}],"messages":[{"role":"user","content":"hello world"}]}`)
 	version := "2.1.22"
-	result := syncBillingHeaderVersion(body, "claude-cli/"+version)
+	result := syncBillingHeaderVersion(body, "claude-cli/"+version, nil)
 	require.Contains(t, gjson.GetBytes(result, "system.0.text").String(),
 		"cc_version="+version+"."+computeClaudeCodeFingerprint(body, version)+";")
-	require.Equal(t, string(result), string(syncBillingHeaderVersion(result, "claude-cli/"+version)))
+	require.Equal(t, string(result), string(syncBillingHeaderVersion(result, "claude-cli/"+version, nil)))
 	require.JSONEq(t, gjson.GetBytes(body, "messages").Raw, gjson.GetBytes(result, "messages").Raw)
 }
 
@@ -136,10 +136,7 @@ func TestBuildOAuthRequest_BillingMatchesWireUserAgent(t *testing.T) {
 				}
 				require.NoError(t, err)
 				defer func() { require.NoError(t, req.Body.Close()) }()
-				wantUA := cachedUA
-				if tc.mimic {
-					wantUA = claude.DefaultHeaders()["User-Agent"]
-				}
+				wantUA := claude.DefaultHeaders()["User-Agent"]
 				require.Equal(t, wantUA, getHeaderRaw(req.Header, "User-Agent"))
 				version := ExtractCLIVersion(wantUA)
 				require.Contains(t, gjson.GetBytes(wireBody, "system.0.text").String(),

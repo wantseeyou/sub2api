@@ -67,6 +67,7 @@ func (s *GatewayService) ForwardCountTokens(ctx context.Context, c *gin.Context,
 	}
 
 	body := parsed.Body.Bytes()
+	captureClaudeBillingSource(c, body)
 	replaceBody := func(next []byte) error {
 		if err := parsed.ReplaceBody(next); err != nil {
 			return fmt.Errorf("rewrite count_tokens body: %w", err)
@@ -494,38 +495,21 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 		clientHeaders = c.Request.Header
 	}
 
-	// OAuth 账号：应用统一指纹和重写 userID（受设置开关控制）
-	// 如果启用了会话ID伪装，会在重写后替换 session 部分为固定值
-	ctEnableFP, ctEnableMPT := true, false
-	if s.settingService != nil {
-		ctEnableFP, ctEnableMPT, _ = s.settingService.GetGatewayForwardingSettings(ctx)
+	// 与 messages 共用身份和自动环境处理，覆盖真实客户端及重试。
+	body, ctFingerprint, privacyErr := s.prepareClaudeOAuthClientBody(ctx, account, body, clientHeaders)
+	if privacyErr != nil {
+		return nil, nil, privacyErr
 	}
-	var ctFingerprint *Fingerprint
-	if account.IsOAuth() && s.identityService != nil {
-		fp, err := s.identityService.GetOrCreateFingerprint(ctx, account.ID, clientHeaders)
-		if err == nil {
-			ctFingerprint = fp
-			if !ctEnableMPT {
-				accountUUID := account.GetExtraString("account_uuid")
-				if accountUUID != "" && fp.ClientID != "" {
-					if newBody, err := s.identityService.RewriteUserIDWithMasking(ctx, body, account, accountUUID, fp.ClientID, fp.UserAgent); err == nil && len(newBody) > 0 {
-						body = newBody
-					}
-				}
-			}
-		}
+	ctEnableFP := true
+	if s.settingService != nil {
+		ctEnableFP, _, _ = s.settingService.GetGatewayForwardingSettings(ctx)
 	}
 
-	// Disabled fingerprint unification does not disable forced mimicry headers.
-	var billingFingerprint *Fingerprint
-	if ctEnableFP {
-		billingFingerprint = ctFingerprint
-	}
 	// 一致性铁律：同一次请求内只取一次 mimic UA，billing cc_version 与出站
 	// User-Agent 头共用这一个字符串（同 buildUpstreamRequest）。
 	ctMimicUserAgent := claude.DefaultUserAgent()
-	if billingUA := effectiveBillingUserAgent(ctMimicUserAgent, tokenType, mimicClaudeCode, billingFingerprint); billingUA != "" {
-		body = syncBillingHeaderVersion(body, billingUA)
+	if billingUA := effectiveBillingUserAgent(ctMimicUserAgent, tokenType); billingUA != "" {
+		body = syncBillingHeaderVersion(body, billingUA, c)
 	}
 
 	// === 计算最终 anthropic-beta header（先于 body sanitize 与 CCH 签名）===
@@ -562,13 +546,15 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 		setAnthropicAPIKeyAuthHeader(req.Header, account, token, baseURL)
 	}
 
-	// 白名单透传 headers（恢复真实 wire casing）
-	for key, values := range clientHeaders {
-		lowerKey := strings.ToLower(key)
-		if allowedHeaders[lowerKey] {
-			wireKey := resolveWireCasing(key)
-			for _, v := range values {
-				addHeaderRaw(req.Header, wireKey, v)
+	// 与 messages 相同：OAuth mimic 不透传第三方客户端头部。
+	if tokenType != "oauth" || !mimicClaudeCode {
+		for key, values := range clientHeaders {
+			lowerKey := strings.ToLower(key)
+			if allowedHeaders[lowerKey] {
+				wireKey := resolveWireCasing(key)
+				for _, v := range values {
+					addHeaderRaw(req.Header, wireKey, v)
+				}
 			}
 		}
 	}
@@ -585,7 +571,7 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	if getHeaderRaw(req.Header, "anthropic-version") == "" {
 		setHeaderRaw(req.Header, "anthropic-version", "2023-06-01")
 	}
-	if tokenType == "oauth" {
+	if tokenType == "oauth" && !mimicClaudeCode {
 		applyClaudeOAuthHeaderDefaults(req)
 	}
 
@@ -601,7 +587,9 @@ func (s *GatewayService) buildCountTokensRequest(ctx context.Context, c *gin.Con
 	}
 
 	// 同步 X-Claude-Code-Session-Id 头：取 body 中已处理的 metadata.user_id 的 session_id 覆盖
-	if sessionHeader := getHeaderRaw(req.Header, "X-Claude-Code-Session-Id"); sessionHeader != "" {
+	if tokenType == "oauth" {
+		syncClaudeOAuthSessionHeader(req, body)
+	} else if sessionHeader := getHeaderRaw(req.Header, "X-Claude-Code-Session-Id"); sessionHeader != "" {
 		if uid := gjson.GetBytes(body, "metadata.user_id").String(); uid != "" {
 			if parsed := ParseMetadataUserID(uid); parsed != nil {
 				setHeaderRaw(req.Header, "X-Claude-Code-Session-Id", parsed.SessionID)

@@ -405,8 +405,7 @@ func (s *SettingService) InvalidateOpenAICodexClientVersionCache() {
 }
 
 // NormalizeClaudeCodeClientVersion 校验并归一化 Claude Code 客户端版本号，非法值返回空串。
-// 容忍前导 "v" 与首尾空白；合法性复用 claude.IsSupportedCLIVersion（严格三段纯数字 semver、
-// 无预发布/构建后缀、且不低于内置基线）。
+// 容忍前导 "v" 与首尾空白；仅接受 claude.IsSupportedCLIVersion 指定的固定版本。
 func NormalizeClaudeCodeClientVersion(version string) string {
 	normalized := strings.TrimSpace(version)
 	normalized = strings.TrimPrefix(normalized, "v")
@@ -420,9 +419,7 @@ func NormalizeClaudeCodeClientVersion(version string) string {
 }
 
 // GetClaudeCodeClientVersion 返回出站声明的 Claude Code CLI 客户端版本号。
-// 优先级：管理员在面板覆写的版本 → 自动同步到的官方最新版本 → claude.CLIVersion()
-// （环境变量 SUB2API_CLAUDE_CLI_VERSION 覆盖 + 内置基线）。
-// 版本太旧会被 Anthropic 拒绝（HTTP 400 claude_code_version_too_old），故该值需保持跟随官方发布。
+// 读取旧部署的手动值和同步值时只接受内置固定版本，其他值回退 claude.CLIVersion()。
 //
 // ⚠️ 一致性约束：同一次请求里，拼 User-Agent（claude-cli/<版本>）的版本号和用于
 // billing attribution 的版本号必须是同一个值，否则 Anthropic 侧对不上、判为非正版客户端。
@@ -990,7 +987,8 @@ func (s *SettingService) GetOpenAITTFTMode(ctx context.Context) string {
 // Returns (fingerprintUnification, metadataPassthrough, cchSigning).
 func (s *SettingService) GetGatewayForwardingSettings(ctx context.Context) (fingerprintUnification, metadataPassthrough, cchSigning bool) {
 	result := s.getGatewayForwardingSettingsCached(ctx)
-	return result.fp, result.mp, result.cch
+	// 固定客户端配置下始终替换身份；保留旧配置字段以兼容已有管理端。
+	return result.fp, false, result.cch
 }
 
 // IsAnthropicCacheTTL1hInjectionEnabled 检查是否对 Anthropic OAuth/SetupToken 请求体注入 1h cache_control ttl。
