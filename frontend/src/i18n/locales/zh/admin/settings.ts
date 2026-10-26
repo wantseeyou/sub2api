@@ -171,8 +171,6 @@ export default {
           },
         },
       },
-      emailTabDisabledTitle: '邮箱验证未启用',
-      emailTabDisabledHint: '请在「安全与认证」选项卡中启用邮箱验证后，再配置 SMTP 设置。',
       registration: {
         title: '注册设置',
         description: '控制用户注册和验证',
@@ -474,6 +472,19 @@ export default {
         accountSchedulingThresholdsGlobalHint: '系统级默认值，作用于该平台全部账号。可在账号编辑页对单个账号覆盖。',
         accountSchedulingThresholdsDisabledHint: '100 表示禁用该平台自动停调；1–99 表示达到该利用率后暂停调度。',
         accountSchedulingThresholdsRangeHint: '整数 1–100（百分比）。仅 OpenAI / Anthropic / Grok。'
+      },
+      openaiQuotaAutomation: {
+        title: 'OpenAI OAuth 额度自动化',
+        description: '作用于全部正常启用的 OpenAI OAuth 账号，无须逐个开启；默认均关闭。沿用上方平台停调阈值及单账号覆盖值。',
+        recover: '自动恢复额度停调',
+        recoverHint: '每分钟查询暂停账号的上游额度。7 日已用归零时解除本次额度停调，即使 5 小时用量仍较高。同一次归零只恢复一次，后续仍可能按原规则暂停。',
+        expiry: '临期重置卡自动使用',
+        expiryHint: '账号达到停调阈值并暂停后，使用临期卡中最早到期的一张。未达到停调阈值时不使用。',
+        expiryDays: '到期前天数（1–365）',
+        expiryDaysInvalid: '重置卡临期天数必须为 1–365 的整数。',
+        threshold: '额度停调后自动使用重置卡',
+        thresholdHint: '账号达到停调阈值并暂停后，使用最早到期的有效卡，不要求该卡临期；与临期策略同时命中也只用一次。',
+        compatibilityHint: '两个用卡开关都关闭时沿用原账号级自动用卡配置；任一个开启后由全局策略接管。人工停用及其他故障不会被自动解除。',
       },
       upstreamBillingProbe: {
         title: '上游倍率自动探测',
@@ -966,7 +977,7 @@ export default {
       },
       quotaNotify: {
         title: '账号限额通知',
-        description: '当账号配额用量达到告警阈值时通知管理员',
+        description: '账号金额配额达到告警阈值，或 OpenAI OAuth 账号达到自动停调阈值时通知管理员。仅需配置 SMTP，无须启用邮箱认证或订阅到期提醒。',
         enabled: '启用账号限额通知',
         emails: '通知邮箱',
         emailsHint: '留空则不发送通知',

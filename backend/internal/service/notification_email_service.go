@@ -1100,7 +1100,7 @@ var notificationEmailEventDefinitions = map[string]NotificationEmailEventInfo{
 		Category:    "admin",
 		Optional:    false,
 		Placeholders: append(append([]string{}, notificationEmailCommonPlaceholders...),
-			"account_id", "account_name", "platform", "quota_dimension", "quota_used", "quota_limit", "quota_remaining", "quota_threshold"),
+			"account_id", "account_name", "platform", "quota_dimension", "quota_used", "quota_limit", "quota_remaining", "quota_threshold", "quota_reset_description"),
 	},
 	NotificationEmailEventContentModerationViolation: {
 		Event:       NotificationEmailEventContentModerationViolation,
@@ -1304,7 +1304,8 @@ var notificationEmailOfficialTemplates = map[string]map[string]notificationEmail
   <tr><td>Used / Limit</td><td>{{quota_used}} / {{quota_limit}}</td></tr>
   <tr><td>Remaining</td><td>{{quota_remaining}}</td></tr>
   <tr><td>Threshold</td><td>{{quota_threshold}}</td></tr>
-</table>`),
+</table>
+<p>{{quota_reset_description}}</p>`),
 		},
 		notificationEmailLocaleChinese: {
 			Subject: "[{{site_name}}] 账号限额告警 - {{account_name}}",
@@ -1317,7 +1318,8 @@ var notificationEmailOfficialTemplates = map[string]map[string]notificationEmail
   <tr><td>已用 / 限额</td><td>{{quota_used}} / {{quota_limit}}</td></tr>
   <tr><td>剩余额度</td><td>{{quota_remaining}}</td></tr>
   <tr><td>告警阈值</td><td>{{quota_threshold}}</td></tr>
-</table>`),
+</table>
+<p>{{quota_reset_description}}</p>`),
 		},
 	},
 	NotificationEmailEventContentModerationViolation: {

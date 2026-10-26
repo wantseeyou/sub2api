@@ -991,6 +991,13 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		}
 	}
 
+	automation, err := parseOpenAIQuotaAutomationSettings(settings[SettingKeyOpenAIQuotaAutomation])
+	if err != nil {
+		slog.Warn("[Setting] invalid OpenAI quota automation settings", "error", err)
+		automation = defaultOpenAIQuotaAutomationSettings()
+	}
+	result.OpenAIQuotaAutomation = &automation
+
 	result.AllowUserViewErrorRequests = settings[SettingKeyAllowUserViewErrorRequests] == "true" // default false
 
 	// Publish Grok default model_mapping options for accounts with empty mapping.

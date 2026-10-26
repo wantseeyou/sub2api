@@ -354,7 +354,8 @@ type SystemSettings struct {
 	DefaultPlatformQuotas map[string]*service.DefaultPlatformQuotaSetting `json:"default_platform_quotas,omitempty"`
 
 	// 系统全局账号自动停调阈值（key = platform，100 = disabled）
-	AccountSchedulingThresholds map[string]int `json:"account_scheduling_thresholds,omitempty"`
+	AccountSchedulingThresholds map[string]int                         `json:"account_scheduling_thresholds,omitempty"`
+	OpenAIQuotaAutomation       *service.OpenAIQuotaAutomationSettings `json:"openai_quota_automation"` // OpenAI OAuth 全局额度自动化配置。
 
 	// 允许终端用户在用量页查看自己的失败请求
 	AllowUserViewErrorRequests bool `json:"allow_user_view_error_requests"`

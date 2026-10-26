@@ -28,7 +28,11 @@ func normalizeAccountTestMode(mode string) string {
 // 流式 /responses + input 末尾 {"type":"compaction_trigger"}。上游已下线
 // legacy unary /responses/compact（v1 形态恒 404，#5598/#5624），现行 codex
 // 默认协议即 v2（RemoteCompactionV2 Stable + default_enabled）。
-func createOpenAICompactProbePayload(model string, isOAuth bool) map[string]any {
+func createOpenAICompactProbePayload(model string, isOAuth bool, prompts ...string) map[string]any {
+	prompt := "Respond with OK."
+	if len(prompts) > 0 {
+		prompt = resolveAccountTestPrompt(prompts[0])
+	}
 	payload := map[string]any{
 		"model":        strings.TrimSpace(model),
 		"instructions": "You are a helpful coding assistant.",
@@ -36,7 +40,7 @@ func createOpenAICompactProbePayload(model string, isOAuth bool) map[string]any 
 			map[string]any{
 				"type":    "message",
 				"role":    "user",
-				"content": "Respond with OK.",
+				"content": prompt,
 			},
 			map[string]any{"type": "compaction_trigger"},
 		},

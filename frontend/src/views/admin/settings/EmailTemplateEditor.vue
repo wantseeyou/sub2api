@@ -268,6 +268,7 @@ const fallbackPlaceholders = [
   "{{quota_limit}}",
   "{{quota_remaining}}",
   "{{quota_threshold}}",
+  "{{quota_reset_description}}",
   "{{triggered_at}}",
   "{{group_name}}",
   "{{moderation_category}}",

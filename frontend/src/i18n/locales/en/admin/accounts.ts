@@ -1685,6 +1685,8 @@ export default {
       selectTestModel: 'Select Test Model',
       testModel: 'Test model',
       testPrompt: 'Prompt: "hi"',
+      textPromptLabel: 'Test prompt',
+      textPromptHint: 'Defaults to hi. Enter your own text, or leave blank to use hi.',
       imagePromptLabel: 'Image prompt',
       imagePromptPlaceholder: 'Example: Generate an orange cat astronaut sticker in pixel-art style on a solid background.',
       imagePromptDefault: 'Generate a cute orange cat astronaut sticker on a clean pastel background.',

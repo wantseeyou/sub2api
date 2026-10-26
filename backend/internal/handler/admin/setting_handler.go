@@ -401,6 +401,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		AffiliateEnabled: settings.AffiliateEnabled,
 
 		AccountSchedulingThresholds: settings.AccountSchedulingThresholds,
+		OpenAIQuotaAutomation:       settings.OpenAIQuotaAutomation,
 		AllowUserViewErrorRequests:  settings.AllowUserViewErrorRequests,
 	}
 

@@ -209,11 +209,16 @@ func (s *RateLimitService) ApplyAccountSchedulingThreshold(ctx context.Context, 
 			"used_percent", decision.UsedPercent,
 			"until", decision.Until.UTC(),
 			"error", err)
-	} else if s.tempUnschedCache != nil {
-		if state := tempUnschedStateFromStoredReason(reason, decision.Until.Unix()); state != nil {
-			if err := s.tempUnschedCache.SetTempUnsched(ctx, account.ID, state); err != nil {
-				slog.Warn("account_scheduling_threshold_cache_set_failed", "account_id", account.ID, "error", err)
+	} else {
+		if s.tempUnschedCache != nil {
+			if state := tempUnschedStateFromStoredReason(reason, decision.Until.Unix()); state != nil {
+				if err := s.tempUnschedCache.SetTempUnsched(ctx, account.ID, state); err != nil {
+					slog.Warn("account_scheduling_threshold_cache_set_failed", "account_id", account.ID, "error", err)
+				}
 			}
+		}
+		if isOpenAIAutoResetCreditAccount(account) {
+			notifyOpenAIAutoResetFromScheduler(account.ID)
 		}
 	}
 

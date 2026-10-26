@@ -5054,6 +5054,39 @@
                 </div>
               </div>
 
+              <div class="space-y-4 border-t border-gray-100 pt-5 dark:border-dark-700" data-testid="openai-quota-automation-settings">
+                <div>
+                  <h3 class="font-medium text-gray-900 dark:text-white">{{ t("admin.settings.openaiQuotaAutomation.title") }}</h3>
+                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t("admin.settings.openaiQuotaAutomation.description") }}</p>
+                </div>
+                <div class="flex items-start justify-between gap-4">
+                  <div>
+                    <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.settings.openaiQuotaAutomation.recover") }}</label>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.settings.openaiQuotaAutomation.recoverHint") }}</p>
+                  </div>
+                  <Toggle v-model="form.openai_quota_automation.auto_recover_enabled" data-testid="openai-quota-auto-recover" />
+                </div>
+                <div class="flex items-start justify-between gap-4">
+                  <div>
+                    <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.settings.openaiQuotaAutomation.expiry") }}</label>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.settings.openaiQuotaAutomation.expiryHint") }}</p>
+                  </div>
+                  <Toggle v-model="form.openai_quota_automation.expiry_reset_enabled" data-testid="openai-quota-expiry-reset" />
+                </div>
+                <div v-if="form.openai_quota_automation.expiry_reset_enabled" class="max-w-xs">
+                  <label for="openai-quota-expiry-days" class="input-label">{{ t("admin.settings.openaiQuotaAutomation.expiryDays") }}</label>
+                  <input id="openai-quota-expiry-days" v-model.number="form.openai_quota_automation.expiry_days" type="number" min="1" max="365" step="1" class="input" />
+                </div>
+                <div class="flex items-start justify-between gap-4">
+                  <div>
+                    <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.settings.openaiQuotaAutomation.threshold") }}</label>
+                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.settings.openaiQuotaAutomation.thresholdHint") }}</p>
+                  </div>
+                  <Toggle v-model="form.openai_quota_automation.threshold_reset_enabled" data-testid="openai-quota-threshold-reset" />
+                </div>
+                <p class="text-xs text-gray-500 dark:text-gray-400">{{ t("admin.settings.openaiQuotaAutomation.compatibilityHint") }}</p>
+              </div>
+
               <div
                 v-if="!form.openai_advanced_scheduler_enabled"
                 class="flex items-center justify-between border-t border-gray-100 pt-5 dark:border-dark-700"
@@ -8449,29 +8482,8 @@
         </div>
 
         <div v-show="activeTab === 'email'" class="space-y-6">
-          <!-- Email disabled hint - show when email_verify_enabled is off -->
-          <div v-if="!form.email_verify_enabled" class="card">
-            <div class="p-6">
-              <div class="flex items-start gap-3">
-                <Icon
-                  name="mail"
-                  size="md"
-                  class="mt-0.5 flex-shrink-0 text-gray-400 dark:text-gray-500"
-                />
-                <div>
-                  <h3 class="font-medium text-gray-900 dark:text-white">
-                    {{ t("admin.settings.emailTabDisabledTitle") }}
-                  </h3>
-                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {{ t("admin.settings.emailTabDisabledHint") }}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- SMTP Settings - Only show when email verification is enabled -->
-          <div v-if="form.email_verify_enabled" class="card">
+          <!-- SMTP 配置独立于各类邮件功能开关。 -->
+          <div class="card">
             <div
               class="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
@@ -8633,8 +8645,8 @@
             </div>
           </div>
 
-          <!-- Send Test Email - Only show when email verification is enabled -->
-          <div v-if="form.email_verify_enabled" class="card">
+          <!-- 测试邮件独立于邮箱认证开关。 -->
+          <div class="card">
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
@@ -8955,6 +8967,7 @@ import { adminAPI } from "@/api";
 import {
   appendAuthSourceDefaultsToUpdateRequest,
   buildAuthSourceDefaultsState,
+  defaultOpenAIQuotaAutomationSettings,
   normalizeAccountSchedulingThresholdsMap,
   normalizePlatformQuotasMap,
   sanitizeAccountSchedulingThresholdsMap,
@@ -9738,6 +9751,7 @@ type SettingsForm = Omit<
   // 系统全局平台限额 map；form 内始终归一化为全部平台对象（模板非空绑定依赖此不变量）
   default_platform_quotas: DefaultPlatformQuotasMap;
   account_scheduling_thresholds: ReturnType<typeof normalizeAccountSchedulingThresholdsMap>;
+  openai_quota_automation: ReturnType<typeof defaultOpenAIQuotaAutomationSettings>;
 };
 
 const schedulingThresholdPlatforms = SCHEDULING_THRESHOLD_PLATFORMS;
@@ -9772,6 +9786,7 @@ const form = reactive<SettingsForm>({
   default_balance: 0,
   default_platform_quotas: normalizePlatformQuotasMap() as DefaultPlatformQuotasMap,
   account_scheduling_thresholds: normalizeAccountSchedulingThresholdsMap(),
+  openai_quota_automation: defaultOpenAIQuotaAutomationSettings(),
   affiliate_rebate_rate: 20,
   affiliate_rebate_freeze_hours: 0,
   affiliate_rebate_duration_days: 0,
@@ -11090,6 +11105,10 @@ async function loadSettings() {
     form.account_scheduling_thresholds = normalizeAccountSchedulingThresholdsMap(
       settings.account_scheduling_thresholds,
     );
+    form.openai_quota_automation = {
+      ...defaultOpenAIQuotaAutomationSettings(),
+      ...settings.openai_quota_automation,
+    };
     form.backend_mode_enabled = settings.backend_mode_enabled;
     form.default_subscriptions = normalizeDefaultSubscriptionSettings(
       settings.default_subscriptions,
@@ -11816,6 +11835,10 @@ async function saveSettings() {
     payload.account_scheduling_thresholds = sanitizeAccountSchedulingThresholdsMap(
       form.account_scheduling_thresholds,
     );
+    if (!Number.isInteger(form.openai_quota_automation.expiry_days) || form.openai_quota_automation.expiry_days < 1 || form.openai_quota_automation.expiry_days > 365) {
+      throw new Error(t("admin.settings.openaiQuotaAutomation.expiryDaysInvalid"));
+    }
+    payload.openai_quota_automation = { ...form.openai_quota_automation };
     appendAuthSourceDefaultsToUpdateRequest(payload, authSourceDefaults);
 
     const updated = await settingsStepUp.run(() =>
@@ -11835,6 +11858,10 @@ async function saveSettings() {
     form.account_scheduling_thresholds = normalizeAccountSchedulingThresholdsMap(
       updated.account_scheduling_thresholds,
     );
+    form.openai_quota_automation = {
+      ...defaultOpenAIQuotaAutomationSettings(),
+      ...updated.openai_quota_automation,
+    };
     registrationEmailSuffixWhitelistTags.value =
       normalizeRegistrationEmailSuffixDomains(
         updated.registration_email_suffix_whitelist,

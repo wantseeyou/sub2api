@@ -182,7 +182,7 @@ describe('AccountTestModal', () => {
     const [, request] = (global.fetch as any).mock.calls[0]
     expect(JSON.parse(request.body)).toEqual({
       model_id: 'grok-4.3',
-      prompt: '',
+      prompt: 'hi',
       mode: 'text'
     })
   })
@@ -216,7 +216,7 @@ describe('AccountTestModal', () => {
     const [, request] = (global.fetch as any).mock.calls[0]
     expect(JSON.parse(request.body)).toMatchObject({
       model_id: 'gpt-5.4',
-      prompt: '',
+      prompt: 'hi',
       mode: 'compact'
     })
   })

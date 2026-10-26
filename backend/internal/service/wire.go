@@ -207,6 +207,7 @@ func ProvideOpenAIQuotaAutoResetService(
 	audit *AuditLogService,
 	settingService *SettingService,
 	leaderLock LeaderLockCache,
+	balanceNotifyService *BalanceNotifyService,
 ) *OpenAIQuotaAutoResetService {
 	service := NewOpenAIQuotaAutoResetService(
 		accountRepo,
@@ -217,6 +218,7 @@ func ProvideOpenAIQuotaAutoResetService(
 		settingService,
 		leaderLock,
 	)
+	service.quotaNotifier = balanceNotifyService
 	service.Start()
 	return service
 }

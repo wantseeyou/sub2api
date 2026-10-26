@@ -19,6 +19,23 @@ export interface DefaultSubscriptionSetting {
   validity_days: number;
 }
 
+export interface OpenAIQuotaAutomationSettings {
+  auto_recover_enabled: boolean;
+  expiry_reset_enabled: boolean;
+  expiry_days: number;
+  threshold_reset_enabled: boolean;
+}
+
+// 创建默认关闭的 OpenAI OAuth 全局额度配置。
+export function defaultOpenAIQuotaAutomationSettings(): OpenAIQuotaAutomationSettings {
+  return {
+    auto_recover_enabled: false,
+    expiry_reset_enabled: false,
+    expiry_days: 1,
+    threshold_reset_enabled: false,
+  };
+}
+
 // ── 平台限额类型 ──────────────────────────────────────────────────
 /** 可设置默认限额的平台：平台清单中的全部具体平台（与后端 AllowedQuotaPlatforms 同源）。 */
 export type PlatformType = AccountPlatform
@@ -611,6 +628,7 @@ export interface SystemSettings {
 
   // Per-platform account auto-pause thresholds (100 = disabled)
   account_scheduling_thresholds: AccountSchedulingThresholdsMap;
+  openai_quota_automation?: OpenAIQuotaAutomationSettings;
 
   // Identity patch configuration (Claude -> Gemini)
   enable_identity_patch: boolean;
@@ -950,6 +968,7 @@ export interface UpdateSettingsRequest {
   grok_cross_client_model_map_enabled?: boolean;
   grok_default_base_url_mode?: string;
   account_scheduling_thresholds?: AccountSchedulingThresholdsMap;
+  openai_quota_automation?: OpenAIQuotaAutomationSettings;
   enable_identity_patch?: boolean;
   identity_patch_prompt?: string;
   ops_monitoring_enabled?: boolean;

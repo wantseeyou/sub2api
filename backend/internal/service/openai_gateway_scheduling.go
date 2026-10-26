@@ -533,7 +533,7 @@ func shouldAutoPauseOpenAIAccountByQuota(ctx context.Context, account *Account) 
 	}
 	// 自动用卡有独立阈值：达到消费阈值时必须先退出调度；仅达到普通暂停阈值时，
 	// 只有新鲜状态明确存在可用卡才继续放行到消费阈值。
-	if config := ResolveOpenAIAutoResetCreditConfig(account); config.Enabled {
+	if config := ResolveOpenAIAutoResetCreditConfig(account); config.Enabled && !globalOpenAIQuotaResetActive() {
 		now := time.Now()
 		utilization5h, has5h := resolveOpenAIQuotaUtilization(account.Extra, "5h", now)
 		utilization7d, has7d := resolveOpenAIQuotaUtilization(account.Extra, "7d", now)

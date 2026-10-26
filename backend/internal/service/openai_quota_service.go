@@ -42,6 +42,7 @@ const (
 // /wham/usage. The upstream returns an explicit `null` window when the slot
 // is unused, so consumers should treat a nil pointer as "no data".
 type OpenAIRateLimitWindow struct {
+	usedPercentKnown   bool    // 上游是否明确提供用量，避免缺字段被误判为归零。
 	UsedPercent        float64 `json:"used_percent"`
 	LimitWindowSeconds int64   `json:"limit_window_seconds"`
 	ResetAfterSeconds  int64   `json:"reset_after_seconds"`

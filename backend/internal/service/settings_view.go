@@ -316,7 +316,8 @@ type SystemSettings struct {
 	DefaultPlatformQuotas map[string]*DefaultPlatformQuotaSetting `json:"default_platform_quotas"`
 
 	// 系统全局账号自动停调阈值（key = platform，100 = disabled）
-	AccountSchedulingThresholds map[string]int `json:"account_scheduling_thresholds"`
+	AccountSchedulingThresholds map[string]int                 `json:"account_scheduling_thresholds"`
+	OpenAIQuotaAutomation       *OpenAIQuotaAutomationSettings `json:"openai_quota_automation"` // OpenAI OAuth 全局额度恢复与用卡规则。
 
 	// 允许终端用户在用量页查看自己的失败请求
 	AllowUserViewErrorRequests bool

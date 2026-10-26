@@ -2,6 +2,7 @@ package admin
 
 import (
 	"log/slog"
+	"reflect"
 
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -621,6 +622,9 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	}
 	if !equalAccountSchedulingThresholds(before.AccountSchedulingThresholds, after.AccountSchedulingThresholds) {
 		changed = append(changed, service.SettingKeyAccountSchedulingThresholds)
+	}
+	if !reflect.DeepEqual(before.OpenAIQuotaAutomation, after.OpenAIQuotaAutomation) {
+		changed = append(changed, service.SettingKeyOpenAIQuotaAutomation)
 	}
 	changed = appendAuthSourceDefaultChanges(changed, beforeAuthSourceDefaults, afterAuthSourceDefaults)
 	return changed

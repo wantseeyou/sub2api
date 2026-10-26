@@ -89,13 +89,15 @@ type openAIAutoResetRecovery interface {
 // OpenAIQuotaAutoResetService 通过小型去重队列承接实时信号，并用分钟扫描补偿
 // 重启、漏事件和多实例读取；真正消费仍由 PostgreSQL 幂等记录串行化。
 type OpenAIQuotaAutoResetService struct {
-	accountRepo AccountRepository
-	quota       openAIAutoResetQuota
-	recoverer   openAIAutoResetRecovery
-	idempotency *IdempotencyCoordinator
-	audit       *AuditLogService
-	settings    *SettingService
-	leaderLock  LeaderLockCache
+	accountRepo       AccountRepository
+	quota             openAIAutoResetQuota
+	recoverer         openAIAutoResetRecovery
+	idempotency       *IdempotencyCoordinator
+	audit             *AuditLogService
+	settings          *SettingService
+	leaderLock        LeaderLockCache
+	quotaNotifier     *BalanceNotifyService         // 复用管理员通知配置与邮件模板服务。
+	notificationQueue *SubscriptionMaintenanceQueue // 有界邮件任务队列。
 
 	ctx     context.Context
 	cancel  context.CancelFunc
@@ -137,6 +139,9 @@ func (s *OpenAIQuotaAutoResetService) Start() {
 		return
 	}
 	s.start.Do(func() {
+		if s.quotaNotifier != nil {
+			s.notificationQueue = NewSubscriptionMaintenanceQueue(2, 100)
+		}
 		setOpenAIAutoResetNotifier(s)
 		for range openAIAutoResetWorkerCount {
 			s.wg.Add(1)
@@ -155,6 +160,9 @@ func (s *OpenAIQuotaAutoResetService) Stop() {
 		clearOpenAIAutoResetNotifier(s)
 		s.cancel()
 		s.wg.Wait()
+		if s.notificationQueue != nil {
+			s.notificationQueue.Stop()
+		}
 	})
 }
 
@@ -224,6 +232,10 @@ func (s *OpenAIQuotaAutoResetService) scanEnabledAccounts(ctx context.Context) {
 	if release != nil {
 		defer release()
 	}
+	if repo, ok := s.accountRepo.(openAIQuotaAutomationRepository); ok {
+		s.scanQuotaAutomationCandidates(ctx, repo)
+		return
+	}
 	for page := 1; ; page++ {
 		accounts, pageInfo, err := s.accountRepo.ListWithFilters(ctx, pagination.PaginationParams{
 			Page: page, PageSize: openAIAutoResetBatchSize,
@@ -287,12 +299,37 @@ func (s *OpenAIQuotaAutoResetService) evaluateAccount(ctx context.Context, accou
 		}
 		return nil
 	}
+	global, err := s.settings.GetOpenAIQuotaAutomationSettings(ctx)
+	if err != nil {
+		return err
+	}
+	if isOpenAIQuotaThresholdPaused(account, time.Now()) {
+		s.enqueueQuotaPauseNotifications(ctx, account)
+		if global.AutoRecoverEnabled || global.UsesGlobalReset() {
+			handled, err := s.evaluateGlobalQuotaAutomation(ctx, account, global)
+			if err != nil || handled {
+				return err
+			}
+			account, err = s.accountRepo.GetByID(ctx, accountID)
+			if err != nil || account == nil {
+				return err
+			}
+		}
+	}
+	if global.UsesGlobalReset() {
+		return nil
+	}
+	// 通知补偿会扫描额度暂停账号，但不能让旧用卡流程清除已有临时故障或限流。
+	now := time.Now()
+	if (account.TempUnschedulableUntil != nil && account.TempUnschedulableUntil.After(now)) ||
+		(account.RateLimitResetAt != nil && account.RateLimitResetAt.After(now)) {
+		return nil
+	}
 	config := ResolveOpenAIAutoResetCreditConfig(account)
 	if !config.Enabled || !account.IsActive() || !account.Schedulable {
 		return nil
 	}
 
-	now := time.Now()
 	assessment := s.assessExtra(account, config, now)
 	state := openAIAutoResetStateFromExtra(account.Extra)
 	// 达到用卡阈值本应立即查询以便用卡；但 10 分钟内已确认无卡时，重查不会改变结论，
@@ -376,10 +413,29 @@ func (s *OpenAIQuotaAutoResetService) evaluateAccount(ctx context.Context, accou
 		})
 	}
 
+	return s.consumeCredit(ctx, account, usage, checking, assessment, nil)
+}
+
+// consumeCredit 复用同一核销流程，并在消费前复核账号状态和当前全局策略。
+func (s *OpenAIQuotaAutoResetService) consumeCredit(ctx context.Context, account *Account, usage *OpenAIQuotaUsage, checking *OpenAIAutoResetCreditState, assessment openAIAutoResetAssessment, global *OpenAIQuotaAutomationSettings) error {
+	accountID := account.ID
+	observedAccount := account
+	available := usage.RateLimitResetCredits.AvailableCount
+	state := checking
+	now := time.Now()
+	var err error
 	cycleSeed := openAIAutoResetCycleSeed(usage)
+	if global != nil {
+		cycleSeed = "pause:" + account.TempUnschedulableReason
+	}
 	cycleHash := shortOpenAIAutoResetHash(cycleSeed)
+	if global != nil && hasPendingOpenAIAutoResetAttempt(state) {
+		cycleHash = state.AttemptCycleHash
+	}
 	candidate, selectErr := selectOpenAIAutoResetCandidate(usage.autoResetCandidates, available, state, cycleHash)
-	if selectErr != nil {
+	replayOnly := global != nil && state.AttemptCycleHash == cycleHash && state.AttemptCreditHash != "" &&
+		(selectErr != nil || !assessment.resetReached)
+	if selectErr != nil && !replayOnly {
 		failed := checking
 		failed.AvailableCount = available
 		failed.TriggerWindow = assessment.triggerWindow
@@ -387,6 +443,14 @@ func (s *OpenAIQuotaAutoResetService) evaluateAccount(ctx context.Context, accou
 		return s.failState(ctx, accountID, failed, infraerrors.Reason(selectErr), selectErr)
 	}
 	creditHash := shortOpenAIAutoResetHash(candidate.ID)
+	if replayOnly {
+		creditHash = state.AttemptCreditHash
+	}
+	if global != nil && !replayOnly && !globalResetCreditEligible(*global, candidate, now) {
+		checking.Status = OpenAIAutoResetStatusAvailable
+		checking.AvailableCount = available
+		return s.persistState(ctx, accountID, checking)
+	}
 	stableKey := fmt.Sprintf("oarc:%d:%s:%s", accountID, creditHash, cycleHash)
 	redeemRequestID := uuid.NewSHA1(uuid.NameSpaceURL, []byte(stableKey)).String()
 	resetting := &OpenAIAutoResetCreditState{
@@ -397,12 +461,22 @@ func (s *OpenAIQuotaAutoResetService) evaluateAccount(ctx context.Context, accou
 		AttemptCycleHash:  cycleHash,
 		AttemptCreditHash: creditHash,
 	}
-	if err := s.persistState(ctx, accountID, resetting); err != nil {
+	account, err = s.accountRepo.GetByID(ctx, accountID)
+	if err != nil || account == nil || !account.IsActive() || !account.Schedulable {
 		return err
 	}
-
-	account, err = s.accountRepo.GetByID(ctx, accountID)
-	if err != nil || account == nil || !ResolveOpenAIAutoResetCreditConfig(account).Enabled {
+	currentPolicy, err := s.settings.refreshOpenAIQuotaAutomationSettings(ctx)
+	if err != nil {
+		return err
+	}
+	if global == nil {
+		if currentPolicy.UsesGlobalReset() || !ResolveOpenAIAutoResetCreditConfig(account).Enabled {
+			return nil
+		}
+	} else if !replayOnly && !s.globalResetStillEligible(ctx, account, observedAccount, usage, currentPolicy, candidate) {
+		return nil
+	}
+	if err := s.persistState(ctx, accountID, resetting); err != nil {
 		return err
 	}
 	result, err := s.idempotency.Execute(ctx, IdempotencyExecuteOptions{
@@ -419,6 +493,18 @@ func (s *OpenAIQuotaAutoResetService) evaluateAccount(ctx context.Context, accou
 		TTL:        openAIAutoResetAttemptTTL,
 		RequireKey: true,
 	}, func(execCtx context.Context) (any, error) {
+		if replayOnly {
+			return nil, infraerrors.Conflict("OPENAI_AUTO_RESET_RESULT_UNCONFIRMED", "the previous reset result cannot be confirmed; refusing another consumption")
+		}
+		if global != nil {
+			fresh, readErr := s.accountRepo.GetByID(execCtx, accountID)
+			if readErr != nil {
+				return nil, readErr
+			}
+			if !s.globalResetStillEligible(execCtx, fresh, observedAccount, usage, currentPolicy, candidate) {
+				return nil, infraerrors.Conflict("OPENAI_QUOTA_AUTOMATION_CHANGED", "account quota pause changed before reset")
+			}
+		}
 		resetResult, resetErr := s.quota.ResetCreditTargeted(execCtx, accountID, candidate.ID, redeemRequestID)
 		if resetErr != nil {
 			return nil, resetErr
@@ -457,7 +543,12 @@ func (s *OpenAIQuotaAutoResetService) evaluateAccount(ctx context.Context, accou
 		return s.persistState(ctx, accountID, noCredit)
 	}
 	postCtx, cancelPost := context.WithTimeout(context.WithoutCancel(ctx), 8*time.Second)
-	post := RunOpenAIQuotaResetPostProcess(postCtx, accountID, s.quota, s.recoverer, s.accountRepo.GetByID)
+	var post OpenAIQuotaResetPostProcessResult
+	if global != nil {
+		post = s.finishGlobalQuotaReset(postCtx, observedAccount)
+	} else {
+		post = RunOpenAIQuotaResetPostProcess(postCtx, accountID, s.quota, s.recoverer, s.accountRepo.GetByID)
+	}
 	cancelPost()
 	if !post.AccountStateRecovered || post.WarningCode != "" {
 		code := post.WarningCode

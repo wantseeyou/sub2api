@@ -558,6 +558,16 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 		updates[SettingKeyAccountSchedulingThresholds] = string(blob)
 	}
 
+	if settings.OpenAIQuotaAutomation != nil {
+		if err := validateOpenAIQuotaAutomationSettings(*settings.OpenAIQuotaAutomation); err != nil {
+			return nil, err
+		}
+		blob, err := json.Marshal(settings.OpenAIQuotaAutomation)
+		if err != nil {
+			return nil, fmt.Errorf("marshal OpenAI quota automation: %w", err)
+		}
+		updates[SettingKeyOpenAIQuotaAutomation] = string(blob)
+	}
 	updates[SettingKeyAllowUserViewErrorRequests] = strconv.FormatBool(settings.AllowUserViewErrorRequests)
 
 	return updates, nil
@@ -703,6 +713,15 @@ func (s *SettingService) refreshCachedSettings(settings *SystemSettings) {
 	if settings == nil {
 		return
 	}
+	s.openAIQuotaAutomationMu.Lock()
+	if settings.OpenAIQuotaAutomation != nil {
+		s.openAIQuotaAutomationCache.Store(&cachedOpenAIQuotaAutomationSettings{
+			settings: *settings.OpenAIQuotaAutomation, expiresAt: time.Now().Add(time.Minute),
+		})
+	} else {
+		s.openAIQuotaAutomationCache.Store(nil)
+	}
+	s.openAIQuotaAutomationMu.Unlock()
 
 	// 先使 inflight singleflight 失效，再刷新缓存，缩小旧值覆盖新值的竞态窗口
 	versionBoundsSF.Forget("version_bounds")

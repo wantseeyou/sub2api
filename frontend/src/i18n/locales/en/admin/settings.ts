@@ -171,8 +171,6 @@ export default {
           },
         },
       },
-      emailTabDisabledTitle: 'Email Verification Not Enabled',
-      emailTabDisabledHint: 'Enable email verification in the Security tab to configure SMTP settings.',
       registration: {
         title: 'Registration Settings',
         description: 'Control user registration and verification',
@@ -481,6 +479,19 @@ export default {
         accountSchedulingThresholdsGlobalHint: 'System-wide default for every account on that platform. Individual accounts can still override this in the account editor.',
         accountSchedulingThresholdsDisabledHint: '100 disables platform auto-pause. Values 1–99 pause scheduling once utilization reaches that percent.',
         accountSchedulingThresholdsRangeHint: 'Integer 1–100 (percent). OpenAI/Anthropic/Grok only.'
+      },
+      openaiQuotaAutomation: {
+        title: 'OpenAI OAuth quota automation',
+        description: 'Applies to all enabled OpenAI OAuth accounts without individual opt-in. All switches default to off. Uses the platform scheduling threshold and account overrides.',
+        recover: 'Automatically recover quota pauses',
+        recoverHint: 'Checks paused accounts every minute. Clears a quota pause once when fresh 7-day usage reaches zero, regardless of 5-hour usage. Normal scheduling rules can pause the account again.',
+        expiry: 'Automatically use expiring reset credits',
+        expiryHint: 'After an account reaches its scheduling threshold and is paused, use the soonest-expiring credit within the expiry window. Do not consume before the account is paused.',
+        expiryDays: 'Days before expiry (1–365)',
+        expiryDaysInvalid: 'Reset credit expiry days must be an integer from 1 to 365.',
+        threshold: 'Automatically use reset credits after quota pauses',
+        thresholdHint: 'After an account reaches its scheduling threshold and is paused, use the soonest-expiring valid credit, even if it is not expiring soon. Matching both policies consumes only once.',
+        compatibilityHint: 'When both reset switches are off, existing per-account settings apply. Enabling either switch gives the global policy precedence. Manual pauses and unrelated failures are preserved.',
       },
       upstreamBillingProbe: {
         title: 'Upstream Rate Auto Detection',
@@ -971,7 +982,7 @@ export default {
       },
       quotaNotify: {
         title: 'Account Quota Notification',
-        description: 'Notify admins when account quota usage reaches alert threshold',
+        description: 'Notify admins when an account reaches its spending alert threshold or an OpenAI OAuth account is paused at its scheduling threshold. Requires SMTP; email verification and subscription reminders can remain off.',
         enabled: 'Enable Account Quota Notification',
         emails: 'Notification Emails',
         emailsHint: 'Leave empty to disable notifications',

@@ -81,7 +81,17 @@
         />
       </div>
 
-      <div v-if="supportsPromptInput" class="space-y-1.5">
+      <div v-if="isTextTest" class="space-y-1.5">
+        <TextArea
+          v-model="textPrompt"
+          :label="t('admin.accounts.textPromptLabel')"
+          :hint="t('admin.accounts.textPromptHint')"
+          placeholder="hi"
+          :disabled="status === 'connecting'"
+          rows="3"
+        />
+      </div>
+      <div v-else-if="supportsPromptInput" class="space-y-1.5">
         <TextArea
           v-model="testPrompt"
           :label="promptInputLabel"
@@ -407,6 +417,7 @@ const errorMessage = ref('')
 const availableModels = ref<ClaudeModel[]>([])
 const selectedModelId = ref('')
 const testPrompt = ref('')
+const textPrompt = ref('hi')
 const loadingModels = ref(false)
 let abortController: AbortController | null = null
 const generatedImages = ref<PreviewMedia[]>([])
@@ -496,9 +507,15 @@ const modelOptionsForMode = computed(() => {
   return []
 })
 
+const isTextTest = computed(() =>
+  isGrokAccount.value
+    ? grokTestMode.value === 'text'
+    : !supportsImageTest.value || testMode.value === 'compact'
+)
+
 const supportsPromptInput = computed(() => {
   if (!isGrokAccount.value) {
-    return supportsImageTest.value
+    return supportsImageTest.value && !isTextTest.value
   }
   return (
     grokTestMode.value === 'image' ||
@@ -669,8 +686,8 @@ const testModeSummary = computed(() => {
         return t('admin.accounts.grok.textTestMode')
     }
   }
-  if (supportsImageTest.value) return t('admin.accounts.imageTestMode')
-  return t('admin.accounts.testPrompt')
+  if (!isTextTest.value && supportsImageTest.value) return t('admin.accounts.imageTestMode')
+  return t('admin.accounts.textPromptLabel')
 })
 
 const canStartTest = computed(() => {
@@ -738,6 +755,7 @@ watch(
   async (newVal) => {
     if (newVal && props.account) {
       testPrompt.value = ''
+      textPrompt.value = 'hi'
       testMode.value = 'default'
       grokTestMode.value = 'text'
       resetState()
@@ -852,7 +870,9 @@ const startTest = async () => {
       audio_data_url?: string
     } = {
       model_id: showModelSelect.value ? selectedModelId.value : '',
-      prompt: supportsPromptInput.value ? testPrompt.value.trim() : ''
+      prompt: isTextTest.value
+        ? textPrompt.value.trim() || 'hi'
+        : supportsPromptInput.value ? testPrompt.value.trim() : ''
     }
     if (isOpenAIAccount.value) {
       requestBody.mode = testMode.value
