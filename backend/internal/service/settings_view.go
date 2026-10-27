@@ -311,6 +311,14 @@ type SystemSettings struct {
 	// 账号限额通知
 	AccountQuotaNotifyEnabled bool
 	AccountQuotaNotifyEmails  []NotifyEmailEntry
+	AccountErrorNotifyEnabled bool // 上游账号进入错误状态时通知管理员。
+	NewUserNotifyEnabled      bool // 新用户注册成功时通知管理员。
+
+	XtuisPushEnabled             bool     // 推送总开关。
+	XtuisPushAccountQuotaEnabled bool     // 账号限额推送开关。
+	XtuisPushAccountErrorEnabled bool     // 账号错误推送开关。
+	XtuisPushNewUserEnabled      bool     // 新用户注册推送开关。
+	XtuisPushTokens              []string `json:"-"` // 保存的推送凭据，仅供后端读写。
 
 	// 系统全局默认平台配额（key = platform，nil/缺省 = 不限制）
 	DefaultPlatformQuotas map[string]*DefaultPlatformQuotaSetting `json:"default_platform_quotas"`

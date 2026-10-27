@@ -376,6 +376,12 @@ const eventDisplayMeta: Record<string, EventDisplayMeta> = {
     timing: "余额充值订单支付完成并入账后发送。",
     categoryLabel: "计费",
   },
+  "account.error": {
+    label: "账号错误通知", timing: "上游账号首次进入错误状态（包含 401）时通知管理员，同一错误期间不重复通知。", categoryLabel: "系统服务",
+  },
+  "admin.user_registered": {
+    label: "新用户注册通知", timing: "邮箱或第三方注册完成后通知管理员，已有用户登录不通知。", categoryLabel: "系统服务",
+  },
   "account.quota_alert": {
     label: "账号限额告警",
     timing: "上游账号的用量达到配置的额度告警阈值时发送给管理员通知邮箱。",
@@ -438,6 +444,12 @@ const eventDisplayMetaEn: Record<string, EventDisplayMeta> = {
     label: "Balance Recharge Success",
     timing: "Sent after a balance recharge order is paid and credited.",
     categoryLabel: "Billing",
+  },
+  "account.error": {
+    label: "Account Error", timing: "Sent to administrators once when an upstream account enters an error state, including 401 failures.", categoryLabel: "System Service",
+  },
+  "admin.user_registered": {
+    label: "New User Registration", timing: "Sent to administrators after email or third-party registration completes, excluding existing-user logins.", categoryLabel: "System Service",
   },
   "account.quota_alert": {
     label: "Account Quota Alert",

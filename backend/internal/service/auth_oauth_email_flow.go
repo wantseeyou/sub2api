@@ -299,6 +299,19 @@ func (s *AuthService) FinalizeOAuthEmailAccount(
 	// snapshot user × platform quota（fail-open）
 	_ = s.snapshotPlatformQuotaDefaults(ctx, user.ID, &grantPlan)
 	s.bindOAuthAffiliate(ctx, user.ID, affiliateCode)
+	if tx := dbent.TxFromContext(ctx); tx != nil {
+		tx.OnCommit(func(next dbent.Committer) dbent.Committer {
+			return dbent.CommitFunc(func(commitCtx context.Context, committed *dbent.Tx) error {
+				if err := next.Commit(commitCtx, committed); err != nil {
+					return err
+				}
+				s.NotifyUserRegistered(user, signupSource)
+				return nil
+			})
+		})
+	} else {
+		s.NotifyUserRegistered(user, signupSource)
+	}
 	return nil
 }
 

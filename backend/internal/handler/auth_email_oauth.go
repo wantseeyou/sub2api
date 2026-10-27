@@ -210,6 +210,10 @@ func (h *AuthHandler) emailOAuthCallbackWithProfile(
 		return
 	}
 
+	if tokenPair.NewUser {
+		h.authService.NotifyUserRegistered(user, input.ProviderType)
+	}
+
 	fragment := url.Values{}
 	fragment.Set("access_token", tokenPair.AccessToken)
 	fragment.Set("refresh_token", tokenPair.RefreshToken)

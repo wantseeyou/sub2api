@@ -966,6 +966,17 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 
 	// 账号限额通知
 	result.AccountQuotaNotifyEnabled = settings[SettingKeyAccountQuotaNotifyEnabled] == "true"
+	result.AccountErrorNotifyEnabled = settings[SettingKeyAccountErrorNotifyEnabled] == "true"
+	result.NewUserNotifyEnabled = settings[SettingKeyNewUserNotifyEnabled] == "true"
+	result.XtuisPushEnabled = settings[SettingKeyXtuisPushEnabled] == "true"
+	result.XtuisPushAccountQuotaEnabled = settings[SettingKeyXtuisPushAccountQuotaEnabled] == "true"
+	result.XtuisPushAccountErrorEnabled = settings[SettingKeyXtuisPushAccountErrorEnabled] == "true"
+	result.XtuisPushNewUserEnabled = settings[SettingKeyXtuisPushNewUserEnabled] == "true"
+	if tokens, err := parseXtuisPushTokens(settings[SettingKeyXtuisPushTokens]); err != nil {
+		slog.Warn("xtuis_push_settings_invalid", "error", err)
+	} else {
+		result.XtuisPushTokens = tokens
+	}
 	if raw := strings.TrimSpace(settings[SettingKeyAccountQuotaNotifyEmails]); raw != "" {
 		result.AccountQuotaNotifyEmails = ParseNotifyEmails(raw)
 	}

@@ -103,11 +103,10 @@ func (s *AuthService) loginOrRegisterVerifiedEmailOAuth(
 		user, err = s.userRepo.GetByEmail(ctx, email)
 		if err != nil {
 			if errors.Is(err, ErrUserNotFound) {
-				user, err = s.createEmailOAuthUser(ctx, email, input.Username, providerType, invitationCode, affiliateCode)
+				user, created, err = s.createEmailOAuthUser(ctx, email, input.Username, providerType, invitationCode, affiliateCode)
 				if err != nil {
 					return nil, nil, err
 				}
-				created = true
 			} else {
 				logger.LegacyPrintf("service.auth", "[Auth] Database error during %s oauth login: %v", providerType, err)
 				return nil, nil, ErrServiceUnavailable
@@ -151,28 +150,30 @@ func (s *AuthService) loginOrRegisterVerifiedEmailOAuth(
 	if err != nil {
 		return nil, nil, fmt.Errorf("generate token pair: %w", err)
 	}
+	tokenPair.NewUser = created
 	return tokenPair, user, nil
 }
 
-func (s *AuthService) createEmailOAuthUser(ctx context.Context, email, username, providerType, invitationCode, affiliateCode string) (*User, error) {
+// createEmailOAuthUser 创建 OAuth 用户，并返回是否由本次请求新建。
+func (s *AuthService) createEmailOAuthUser(ctx context.Context, email, username, providerType, invitationCode, affiliateCode string) (*User, bool, error) {
 	if s.settingService == nil || !s.settingService.IsRegistrationEnabled(ctx) {
-		return nil, ErrRegDisabled
+		return nil, false, ErrRegDisabled
 	}
 	invitationRedeemCode, err := s.validateOAuthRegistrationInvitation(ctx, invitationCode)
 	if err != nil {
 		if errors.Is(err, ErrInvitationCodeRequired) {
-			return nil, ErrOAuthInvitationRequired
+			return nil, false, ErrOAuthInvitationRequired
 		}
-		return nil, err
+		return nil, false, err
 	}
 
 	randomPassword, err := randomHexString(32)
 	if err != nil {
-		return nil, ErrServiceUnavailable
+		return nil, false, ErrServiceUnavailable
 	}
 	hashedPassword, err := s.HashPassword(randomPassword)
 	if err != nil {
-		return nil, fmt.Errorf("hash password: %w", err)
+		return nil, false, fmt.Errorf("hash password: %w", err)
 	}
 	grantPlan := s.resolveSignupGrantPlan(ctx, providerType)
 	var defaultRPMLimit int
@@ -194,11 +195,11 @@ func (s *AuthService) createEmailOAuthUser(ctx context.Context, email, username,
 		if errors.Is(err, ErrEmailExists) {
 			existing, loadErr := s.userRepo.GetByEmail(ctx, email)
 			if loadErr != nil {
-				return nil, ErrServiceUnavailable
+				return nil, false, ErrServiceUnavailable
 			}
-			return existing, nil
+			return existing, false, nil
 		}
-		return nil, ErrServiceUnavailable
+		return nil, false, ErrServiceUnavailable
 	}
 	s.postAuthUserBootstrap(ctx, user, providerType, false)
 	s.assignSubscriptions(ctx, user.ID, grantPlan.Subscriptions, "auto assigned by signup defaults")
@@ -208,10 +209,10 @@ func (s *AuthService) createEmailOAuthUser(ctx context.Context, email, username,
 	if invitationRedeemCode != nil {
 		if err := s.useOAuthRegistrationInvitation(ctx, invitationRedeemCode.ID, user.ID); err != nil {
 			_ = s.RollbackOAuthEmailAccountCreation(ctx, user.ID, invitationCode)
-			return nil, ErrInvitationCodeInvalid
+			return nil, false, ErrInvitationCodeInvalid
 		}
 	}
-	return user, nil
+	return user, true, nil
 }
 
 func (s *AuthService) findEmailOAuthIdentityOwner(ctx context.Context, providerType, providerKey, providerSubject string) (*User, error) {

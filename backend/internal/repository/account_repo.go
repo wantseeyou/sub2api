@@ -49,7 +49,8 @@ type accountRepository struct {
 	// 确保粘性会话能及时感知账号不可用状态。
 	// Used to proactively sync account snapshot to cache when status changes,
 	// ensuring sticky sessions can promptly detect unavailable accounts.
-	schedulerCache service.SchedulerCache
+	schedulerCache       service.SchedulerCache
+	accountErrorNotifier func(int64, string) // 账号首次进入错误状态后的异步通知入口。
 }
 
 var schedulerNeutralExtraKeyPrefixes = []string{
@@ -1482,20 +1483,44 @@ func (r *accountRepository) BatchUpdateLastUsed(ctx context.Context, updates map
 	return nil
 }
 
-func (r *accountRepository) SetError(ctx context.Context, id int64, errorMsg string) error {
-	_, err := r.client.Account.Update().
-		Where(dbaccount.IDEQ(id)).
-		SetStatus(service.StatusError).
-		SetErrorMessage(errorMsg).
-		SetSchedulable(false).
-		Save(ctx)
+// SetAccountErrorNotifier 注入错误通知入口，初始化完成后不再变更。
+func (r *accountRepository) SetAccountErrorNotifier(notify func(int64, string)) {
+	r.accountErrorNotifier = notify
+}
+
+// SetError 原子标记错误并只为本次状态转换发送通知。
+func (r *accountRepository) SetError(ctx context.Context, id int64, errorMsg string) (err error) {
+	rows, err := r.sql.QueryContext(ctx, `
+        WITH previous AS (
+            SELECT id, status FROM accounts WHERE id = $1 AND deleted_at IS NULL FOR UPDATE
+        )
+        UPDATE accounts AS a
+        SET status = $2, error_message = $3, schedulable = FALSE, updated_at = NOW()
+        FROM previous
+        WHERE a.id = previous.id
+        RETURNING previous.status <> $2
+    `, id, service.StatusError, errorMsg)
 	if err != nil {
+		return err
+	}
+	defer func() { err = errors.Join(err, rows.Close()) }()
+	if !rows.Next() {
+		return rows.Err()
+	}
+	var enteredError bool
+	if err := rows.Scan(&enteredError); err != nil {
+		return err
+	}
+	if err := rows.Close(); err != nil {
 		return err
 	}
 	if err := enqueueSchedulerOutbox(ctx, r.sql, service.SchedulerOutboxEventAccountChanged, &id, nil, nil); err != nil {
 		logger.LegacyPrintf("repository.account", "[SchedulerOutbox] enqueue set error failed: account=%d err=%v", id, err)
 	}
 	r.syncSchedulerAccountSnapshot(ctx, id)
+	if enteredError && r.accountErrorNotifier != nil {
+		r.accountErrorNotifier(id, errorMsg)
+	}
 	return nil
 }
 
@@ -1544,6 +1569,9 @@ func (r *accountRepository) SetGrokCredentialErrorIfMatch(
 		return false, err
 	}
 	r.syncSchedulerAccountSnapshotDetached(ctx, id)
+	if r.accountErrorNotifier != nil {
+		r.accountErrorNotifier(id, errorMsg)
+	}
 	return true, nil
 }
 
@@ -1604,6 +1632,9 @@ func (r *accountRepository) SetGrokOAuthErrorIfCredentialsUnchanged(
 		return false, nil
 	}
 	r.syncSchedulerAccountSnapshotDetached(ctx, id)
+	if r.accountErrorNotifier != nil {
+		r.accountErrorNotifier(id, errorMsg)
+	}
 	return true, nil
 }
 
@@ -1726,6 +1757,9 @@ func (r *accountRepository) SetGrokOAuthRefreshErrorIfCredentialsUnchanged(
 		return false, nil
 	}
 	r.syncSchedulerAccountSnapshotDetached(ctx, id)
+	if r.accountErrorNotifier != nil {
+		r.accountErrorNotifier(id, errorMsg)
+	}
 	return true, nil
 }
 

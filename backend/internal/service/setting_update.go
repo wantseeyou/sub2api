@@ -533,7 +533,22 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyBalanceLowNotifyRechargeURL] = settings.BalanceLowNotifyRechargeURL
 	updates[SettingKeySubscriptionExpiryNotifyEnabled] = strconv.FormatBool(settings.SubscriptionExpiryNotifyEnabled)
 	updates[SettingKeyAccountQuotaNotifyEnabled] = strconv.FormatBool(settings.AccountQuotaNotifyEnabled)
+	updates[SettingKeyAccountErrorNotifyEnabled] = strconv.FormatBool(settings.AccountErrorNotifyEnabled)
+	updates[SettingKeyNewUserNotifyEnabled] = strconv.FormatBool(settings.NewUserNotifyEnabled)
 	updates[SettingKeyAccountQuotaNotifyEmails] = MarshalNotifyEmails(settings.AccountQuotaNotifyEmails)
+	updates[SettingKeyXtuisPushEnabled] = strconv.FormatBool(settings.XtuisPushEnabled)
+	updates[SettingKeyXtuisPushAccountQuotaEnabled] = strconv.FormatBool(settings.XtuisPushAccountQuotaEnabled)
+	updates[SettingKeyXtuisPushAccountErrorEnabled] = strconv.FormatBool(settings.XtuisPushAccountErrorEnabled)
+	updates[SettingKeyXtuisPushNewUserEnabled] = strconv.FormatBool(settings.XtuisPushNewUserEnabled)
+	tokens, err := NormalizeXtuisPushTokens(settings.XtuisPushTokens)
+	if err != nil {
+		return nil, err
+	}
+	tokensJSON, err := json.Marshal(tokens)
+	if err != nil {
+		return nil, err
+	}
+	updates[SettingKeyXtuisPushTokens] = string(tokensJSON)
 
 	// 系统全局 platform quota：整体替换语义（null/缺省 = 不限制）。
 	if settings.DefaultPlatformQuotas != nil {

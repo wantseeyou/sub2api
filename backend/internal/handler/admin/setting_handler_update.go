@@ -300,7 +300,14 @@ type UpdateSettingsRequest struct {
 	BalanceLowNotifyRechargeURL     *string                 `json:"balance_low_notify_recharge_url"`
 	SubscriptionExpiryNotifyEnabled *bool                   `json:"subscription_expiry_notify_enabled"`
 	AccountQuotaNotifyEnabled       *bool                   `json:"account_quota_notify_enabled"`
+	AccountErrorNotifyEnabled       *bool                   `json:"account_error_notify_enabled"` // 省略时保留账号错误通知配置。
+	NewUserNotifyEnabled            *bool                   `json:"new_user_notify_enabled"`      // 省略时保留新用户通知配置。
 	AccountQuotaNotifyEmails        *[]dto.NotifyEmailEntry `json:"account_quota_notify_emails"`
+	XtuisPushEnabled                *bool                   `json:"xtuis_push_enabled"`               // 推送总开关。
+	XtuisPushAccountQuotaEnabled    *bool                   `json:"xtuis_push_account_quota_enabled"` // 账号限额推送开关。
+	XtuisPushAccountErrorEnabled    *bool                   `json:"xtuis_push_account_error_enabled"` // 账号错误推送开关。
+	XtuisPushNewUserEnabled         *bool                   `json:"xtuis_push_new_user_enabled"`      // 新用户注册推送开关。
+	XtuisPushTokens                 *[]string               `json:"xtuis_push_tokens"`                // 省略保留，空数组清空。
 
 	// Payment configuration (integrated into settings, full replace)
 	PaymentEnabled                   *bool    `json:"payment_enabled"`
@@ -1921,6 +1928,48 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			return previousSettings.AccountQuotaNotifyEnabled
 		}(),
+		AccountErrorNotifyEnabled: func() bool {
+			if req.AccountErrorNotifyEnabled != nil {
+				return *req.AccountErrorNotifyEnabled
+			}
+			return previousSettings.AccountErrorNotifyEnabled
+		}(),
+		NewUserNotifyEnabled: func() bool {
+			if req.NewUserNotifyEnabled != nil {
+				return *req.NewUserNotifyEnabled
+			}
+			return previousSettings.NewUserNotifyEnabled
+		}(),
+		XtuisPushEnabled: func() bool {
+			if req.XtuisPushEnabled != nil {
+				return *req.XtuisPushEnabled
+			}
+			return previousSettings.XtuisPushEnabled
+		}(),
+		XtuisPushAccountQuotaEnabled: func() bool {
+			if req.XtuisPushAccountQuotaEnabled != nil {
+				return *req.XtuisPushAccountQuotaEnabled
+			}
+			return previousSettings.XtuisPushAccountQuotaEnabled
+		}(),
+		XtuisPushAccountErrorEnabled: func() bool {
+			if req.XtuisPushAccountErrorEnabled != nil {
+				return *req.XtuisPushAccountErrorEnabled
+			}
+			return previousSettings.XtuisPushAccountErrorEnabled
+		}(),
+		XtuisPushNewUserEnabled: func() bool {
+			if req.XtuisPushNewUserEnabled != nil {
+				return *req.XtuisPushNewUserEnabled
+			}
+			return previousSettings.XtuisPushNewUserEnabled
+		}(),
+		XtuisPushTokens: func() []string {
+			if req.XtuisPushTokens != nil {
+				return *req.XtuisPushTokens
+			}
+			return previousSettings.XtuisPushTokens
+		}(),
 		AccountQuotaNotifyEmails: func() []service.NotifyEmailEntry {
 			if req.AccountQuotaNotifyEmails != nil {
 				return dto.NotifyEmailEntriesToService(*req.AccountQuotaNotifyEmails)
@@ -2412,6 +2461,13 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		BalanceLowNotifyRechargeURL:                            updatedSettings.BalanceLowNotifyRechargeURL,
 		SubscriptionExpiryNotifyEnabled:                        updatedSettings.SubscriptionExpiryNotifyEnabled,
 		AccountQuotaNotifyEnabled:                              updatedSettings.AccountQuotaNotifyEnabled,
+		AccountErrorNotifyEnabled:                              updatedSettings.AccountErrorNotifyEnabled,
+		NewUserNotifyEnabled:                                   updatedSettings.NewUserNotifyEnabled,
+		XtuisPushEnabled:                                       updatedSettings.XtuisPushEnabled,
+		XtuisPushAccountQuotaEnabled:                           updatedSettings.XtuisPushAccountQuotaEnabled,
+		XtuisPushAccountErrorEnabled:                           updatedSettings.XtuisPushAccountErrorEnabled,
+		XtuisPushNewUserEnabled:                                updatedSettings.XtuisPushNewUserEnabled,
+		XtuisPushTokenCount:                                    len(updatedSettings.XtuisPushTokens),
 		AccountQuotaNotifyEmails:                               dto.NotifyEmailEntriesFromService(updatedSettings.AccountQuotaNotifyEmails),
 		PaymentEnabled:                                         updatedPaymentCfg.Enabled,
 		PaymentMinAmount:                                       updatedPaymentCfg.MinAmount,

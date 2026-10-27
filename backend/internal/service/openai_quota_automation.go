@@ -26,7 +26,7 @@ func (s *OpenAIQuotaAutoResetService) scanQuotaAutomationCandidates(ctx context.
 		return
 	}
 	includePaused := policy.AutoRecoverEnabled || policy.UsesGlobalReset() ||
-		(s.quotaNotifier != nil && s.quotaNotifier.isAccountQuotaNotifyEnabled(ctx))
+		(s.quotaNotifier != nil && (s.quotaNotifier.isAccountQuotaNotifyEnabled(ctx) || s.quotaNotifier.xtuisPush.IsAccountQuotaEnabled(ctx)))
 	var afterID int64
 	for ctx.Err() == nil {
 		ids, err := repo.ListOpenAIQuotaAutomationCandidateIDs(ctx, afterID, openAIAutoResetBatchSize, includePaused)

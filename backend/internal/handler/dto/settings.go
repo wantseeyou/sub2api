@@ -308,7 +308,14 @@ type SystemSettings struct {
 	BalanceLowNotifyRechargeURL     string             `json:"balance_low_notify_recharge_url"`
 	SubscriptionExpiryNotifyEnabled bool               `json:"subscription_expiry_notify_enabled"`
 	AccountQuotaNotifyEnabled       bool               `json:"account_quota_notify_enabled"`
+	AccountErrorNotifyEnabled       bool               `json:"account_error_notify_enabled"` // 账号错误通知开关。
+	NewUserNotifyEnabled            bool               `json:"new_user_notify_enabled"`      // 新用户注册通知开关。
 	AccountQuotaNotifyEmails        []NotifyEmailEntry `json:"account_quota_notify_emails"`
+	XtuisPushEnabled                bool               `json:"xtuis_push_enabled"`               // 推送总开关。
+	XtuisPushAccountQuotaEnabled    bool               `json:"xtuis_push_account_quota_enabled"` // 账号限额推送开关。
+	XtuisPushAccountErrorEnabled    bool               `json:"xtuis_push_account_error_enabled"` // 账号错误推送开关。
+	XtuisPushNewUserEnabled         bool               `json:"xtuis_push_new_user_enabled"`      // 新用户注册推送开关。
+	XtuisPushTokenCount             int                `json:"xtuis_push_token_count"`           // 已保存的 Token 数量，不返回凭据。
 
 	// Channel Monitor feature switch
 	ChannelMonitorEnabled                bool   `json:"channel_monitor_enabled"`

@@ -79,6 +79,7 @@ type AuthService struct {
 	settingService        *SettingService
 	emailService          *EmailService
 	turnstileService      *TurnstileService
+	systemNotifications   *SystemNotificationService // 管理员系统事件通知。
 	tencentCaptchaService *TencentCaptchaService
 	aliyunCaptchaService  *AliyunCaptchaService
 	emailQueueService     *EmailQueueService
@@ -296,6 +297,7 @@ func (s *AuthService) RegisterWithVerification(ctx context.Context, email, passw
 		return "", nil, fmt.Errorf("generate token: %w", err)
 	}
 
+	s.NotifyUserRegistered(user, "email")
 	return token, user, nil
 }
 
@@ -583,6 +585,7 @@ func (s *AuthService) LoginOrRegisterOAuth(ctx context.Context, email, username 
 		username = string([]rune(username)[:100])
 	}
 
+	created := false
 	user, err := s.userRepo.GetByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
@@ -634,6 +637,7 @@ func (s *AuthService) LoginOrRegisterOAuth(ctx context.Context, email, username 
 				}
 			} else {
 				user = newUser
+				created = true
 				s.postAuthUserBootstrap(ctx, user, signupSource, false)
 				s.assignSubscriptions(ctx, user.ID, grantPlan.Subscriptions, "auto assigned by signup defaults")
 				// snapshot user × platform quota（fail-open）
@@ -659,6 +663,9 @@ func (s *AuthService) LoginOrRegisterOAuth(ctx context.Context, email, username 
 	token, err := s.GenerateToken(ctx, user)
 	if err != nil {
 		return "", nil, fmt.Errorf("generate token: %w", err)
+	}
+	if created {
+		s.NotifyUserRegistered(user, inferLegacySignupSource(email))
 	}
 	return token, user, nil
 }
@@ -855,6 +862,7 @@ func (s *AuthService) loginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 	if err != nil {
 		return nil, nil, fmt.Errorf("generate token pair: %w", err)
 	}
+	tokenPair.NewUser = created
 	return tokenPair, user, nil
 }
 
@@ -1676,6 +1684,7 @@ type TokenPair struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	ExpiresIn    int    `json:"expires_in"` // Access Token有效期（秒）
+	NewUser      bool   `json:"-"`          // 本次 OAuth 是否新建用户，供最终绑定成功后触发通知。
 }
 
 // TokenPairWithUser extends TokenPair with user role for backend mode checks

@@ -8803,16 +8803,16 @@
             </div>
           </div>
 
-          <!-- Account Quota Notification -->
+          <!-- System Service Notifications -->
           <div class="card">
             <div
               class="border-b border-gray-100 px-6 py-4 dark:border-dark-700"
             >
               <h3 class="text-base font-medium text-gray-900 dark:text-white">
-                {{ t("admin.settings.quotaNotify.title") }}
+                {{ t("admin.settings.systemNotify.title") }}
               </h3>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {{ t("admin.settings.quotaNotify.description") }}
+                {{ t("admin.settings.systemNotify.description") }}
               </p>
             </div>
             <div class="px-6 py-6 space-y-4">
@@ -8823,7 +8823,22 @@
                 >
                 <Toggle v-model="form.account_quota_notify_enabled" />
               </div>
-              <div v-if="form.account_quota_notify_enabled">
+              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t("admin.settings.quotaNotify.description") }}</p>
+              <div class="flex items-start justify-between gap-4 border-t border-gray-100 pt-4 dark:border-dark-700">
+                <div>
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.settings.systemNotify.accountError") }}</label>
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.settings.systemNotify.accountErrorHint") }}</p>
+                </div>
+                <Toggle v-model="form.account_error_notify_enabled" data-testid="account-error-notify-toggle" />
+              </div>
+              <div class="flex items-start justify-between gap-4 border-t border-gray-100 pt-4 dark:border-dark-700">
+                <div>
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.settings.systemNotify.newUser") }}</label>
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.settings.systemNotify.newUserHint") }}</p>
+                </div>
+                <Toggle v-model="form.new_user_notify_enabled" data-testid="new-user-notify-toggle" />
+              </div>
+              <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
                 <label
                   class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300"
                   >{{ t("admin.settings.quotaNotify.emails") }}</label
@@ -8880,6 +8895,55 @@
           </div>
         </div>
         <!-- /Tab: Email -->
+
+        <!-- Tab: Push -->
+        <div v-show="activeTab === 'push'" class="space-y-6">
+          <div class="card">
+            <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+              <h3 class="text-base font-medium text-gray-900 dark:text-white">{{ t("admin.settings.push.title") }}</h3>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t("admin.settings.push.description") }}</p>
+            </div>
+            <div class="space-y-6 px-6 py-6">
+              <div class="flex items-center justify-between gap-4">
+                <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.settings.push.enabled") }}</label>
+                <Toggle v-model="form.xtuis_push_enabled" data-testid="xtuis-push-enabled" />
+              </div>
+              <div>
+                <div class="mb-2 flex items-center justify-between gap-4">
+                  <label for="xtuis-push-tokens" class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.settings.push.tokens") }}</label>
+                  <a href="https://xtuis.cn/" target="_blank" rel="noopener noreferrer" class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400">{{ t("admin.settings.push.getToken") }}</a>
+                </div>
+                <textarea id="xtuis-push-tokens" v-model="xtuisPushTokenDraft" rows="4" class="input w-full font-mono" autocomplete="off" :spellcheck="false" :placeholder="t('admin.settings.push.tokenPlaceholder')" data-testid="xtuis-push-tokens" @input="xtuisPushTokensCleared = false" />
+                <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.settings.push.tokenHint") }}</p>
+                <div class="mt-2 flex items-center justify-between gap-4">
+                  <p class="text-xs text-gray-500 dark:text-gray-400">{{ xtuisPushTokensCleared ? t("admin.settings.push.clearPending") : t("admin.settings.push.savedTokens", { count: form.xtuis_push_token_count }) }}</p>
+                  <button type="button" class="text-sm text-red-600 hover:text-red-700" data-testid="xtuis-push-clear-tokens" @click="xtuisPushTokenDraft = ''; xtuisPushTokensCleared = true">{{ t("admin.settings.push.clearTokens") }}</button>
+                </div>
+              </div>
+              <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+                <div class="flex items-center justify-between gap-4">
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.settings.push.quota") }}</label>
+                  <Toggle v-model="form.xtuis_push_account_quota_enabled" data-testid="xtuis-push-quota" />
+                </div>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.settings.push.quotaHint") }}</p>
+              </div>
+              <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+                <div class="flex items-center justify-between gap-4">
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.settings.push.accountError") }}</label>
+                  <Toggle v-model="form.xtuis_push_account_error_enabled" data-testid="xtuis-push-error" />
+                </div>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.settings.push.accountErrorHint") }}</p>
+              </div>
+              <div class="border-t border-gray-100 pt-4 dark:border-dark-700">
+                <div class="flex items-center justify-between gap-4">
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.settings.push.newUser") }}</label>
+                  <Toggle v-model="form.xtuis_push_new_user_enabled" data-testid="xtuis-push-new-user" />
+                </div>
+                <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.settings.push.newUserHint") }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
 
         <!-- Tab: Backup -->
         <div v-show="activeTab === 'backup'">
@@ -9087,8 +9151,11 @@ type SettingsTab =
   | "gateway"
   | "payment"
   | "email"
+  | "push"
   | "backup";
 const activeTab = ref<SettingsTab>("general");
+const xtuisPushTokenDraft = ref("");
+const xtuisPushTokensCleared = ref(false);
 const settingsTabs = [
   { key: "general" as SettingsTab, icon: "home" as const },
   { key: "agreement" as SettingsTab, icon: "document" as const },
@@ -9098,6 +9165,7 @@ const settingsTabs = [
   { key: "gateway" as SettingsTab, icon: "server" as const },
   { key: "payment" as SettingsTab, icon: "creditCard" as const },
   { key: "email" as SettingsTab, icon: "mail" as const },
+  { key: "push" as SettingsTab, icon: "bell" as const },
   { key: "backup" as SettingsTab, icon: "database" as const },
 ];
 
@@ -10038,6 +10106,13 @@ const form = reactive<SettingsForm>({
   balance_low_notify_recharge_url: "",
   subscription_expiry_notify_enabled: true,
   account_quota_notify_enabled: false,
+  account_error_notify_enabled: false,
+  new_user_notify_enabled: false,
+  xtuis_push_enabled: false,
+  xtuis_push_account_quota_enabled: false,
+  xtuis_push_account_error_enabled: false,
+  xtuis_push_new_user_enabled: false,
+  xtuis_push_token_count: 0,
   account_quota_notify_emails: [] as NotifyEmailEntry[],
   // Channel Monitor feature switch
   channel_monitor_enabled: true,
@@ -11127,6 +11202,8 @@ async function loadSettings() {
         : [10, 20, 50, 100],
     );
     registrationEmailSuffixWhitelistDraft.value = "";
+    xtuisPushTokenDraft.value = "";
+    xtuisPushTokensCleared.value = false;
     form.smtp_password = "";
     smtpPasswordManuallyEdited.value = false;
     form.turnstile_secret_key = "";
@@ -11774,6 +11851,17 @@ async function saveSettings() {
       subscription_expiry_notify_enabled:
         form.subscription_expiry_notify_enabled,
       account_quota_notify_enabled: form.account_quota_notify_enabled,
+      account_error_notify_enabled: form.account_error_notify_enabled,
+      new_user_notify_enabled: form.new_user_notify_enabled,
+      xtuis_push_enabled: form.xtuis_push_enabled,
+      xtuis_push_account_quota_enabled: form.xtuis_push_account_quota_enabled,
+      xtuis_push_account_error_enabled: form.xtuis_push_account_error_enabled,
+      xtuis_push_new_user_enabled: form.xtuis_push_new_user_enabled,
+      xtuis_push_tokens: xtuisPushTokensCleared.value
+        ? []
+        : xtuisPushTokenDraft.value.trim()
+          ? xtuisPushTokenDraft.value.split(/\r?\n/).map(token => token.trim()).filter(Boolean)
+          : undefined,
       account_quota_notify_emails: (
         form.account_quota_notify_emails || []
       ).filter((e) => e.email.trim() !== ""),
@@ -11876,6 +11964,8 @@ async function saveSettings() {
         : [10, 20, 50, 100],
     );
     registrationEmailSuffixWhitelistDraft.value = "";
+    xtuisPushTokenDraft.value = "";
+    xtuisPushTokensCleared.value = false;
     form.smtp_password = "";
     smtpPasswordManuallyEdited.value = false;
     form.turnstile_secret_key = "";

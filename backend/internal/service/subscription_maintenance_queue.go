@@ -74,6 +74,23 @@ func (q *SubscriptionMaintenanceQueue) TryEnqueue(task func()) error {
 	}
 }
 
+// Enqueue 在后台等待队列空位，避免已接收事件因下游短暂拥堵而漏发；请求热路径应使用 TryEnqueue。
+func (q *SubscriptionMaintenanceQueue) Enqueue(task func()) error {
+	if q == nil {
+		return fmt.Errorf("maintenance queue is nil")
+	}
+	if task == nil {
+		return fmt.Errorf("maintenance task is nil")
+	}
+	q.mu.RLock()
+	defer q.mu.RUnlock()
+	if q.closed {
+		return fmt.Errorf("maintenance queue stopped")
+	}
+	q.queue <- task
+	return nil
+}
+
 func (q *SubscriptionMaintenanceQueue) Stop() {
 	if q == nil {
 		return

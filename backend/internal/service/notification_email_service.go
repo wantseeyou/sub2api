@@ -28,6 +28,8 @@ const (
 	NotificationEmailEventBalanceLow                  = "balance.low"
 	NotificationEmailEventBalanceRechargeSuccess      = "balance.recharge_success"
 	NotificationEmailEventAccountQuotaAlert           = "account.quota_alert"
+	NotificationEmailEventAccountError                = "account.error"
+	NotificationEmailEventNewUserRegistered           = "admin.user_registered"
 	NotificationEmailEventContentModerationViolation  = "content_moderation.violation_notice"
 	NotificationEmailEventContentModerationDisabled   = "content_moderation.account_disabled"
 	NotificationEmailEventCyberPolicyNotice           = "content_moderation.cyber_policy_notice"
@@ -517,6 +519,12 @@ func (s *NotificationEmailService) sampleVariables(ctx context.Context, event, l
 	for key, value := range notificationEmailSampleVariables(locale) {
 		variables[key] = value
 	}
+	variables["user_id"] = "1001"
+	variables["user_name"] = "New user"
+	variables["user_email"] = "new-user@example.com"
+	variables["signup_source"] = "email"
+	variables["event_time"] = "2026-10-27T08:00:00Z"
+	variables["error_message"] = "Authentication failed (401)"
 	variables["site_name"] = s.siteName(ctx)
 	if variables["unsubscribe_url"] == "" && info.Optional {
 		variables["unsubscribe_url"] = "https://example.com/unsubscribe"
@@ -1029,6 +1037,8 @@ var notificationEmailEventOrder = []string{
 	NotificationEmailEventBalanceLow,
 	NotificationEmailEventBalanceRechargeSuccess,
 	NotificationEmailEventAccountQuotaAlert,
+	NotificationEmailEventAccountError,
+	NotificationEmailEventNewUserRegistered,
 	NotificationEmailEventContentModerationViolation,
 	NotificationEmailEventContentModerationDisabled,
 	NotificationEmailEventCyberPolicyNotice,
@@ -1037,6 +1047,14 @@ var notificationEmailEventOrder = []string{
 }
 
 var notificationEmailEventDefinitions = map[string]NotificationEmailEventInfo{
+	NotificationEmailEventAccountError: {
+		Event: NotificationEmailEventAccountError, Label: "Account error", Description: "Sent to administrators when an upstream account enters an error state, including 401 authentication failures.", Category: "admin", Optional: false,
+		Placeholders: append(append([]string{}, notificationEmailCommonPlaceholders...), "account_id", "account_name", "platform", "error_message", "event_time"),
+	},
+	NotificationEmailEventNewUserRegistered: {
+		Event: NotificationEmailEventNewUserRegistered, Label: "New user registration", Description: "Sent to administrators after a new user completes registration.", Category: "admin", Optional: false,
+		Placeholders: append(append([]string{}, notificationEmailCommonPlaceholders...), "user_id", "user_name", "user_email", "signup_source", "event_time"),
+	},
 	NotificationEmailEventAuthVerifyCode: {
 		Event:        NotificationEmailEventAuthVerifyCode,
 		Label:        "Email verification code",
@@ -1155,6 +1173,26 @@ var notificationEmailEventDefinitions = map[string]NotificationEmailEventInfo{
 }
 
 var notificationEmailOfficialTemplates = map[string]map[string]notificationEmailOfficialTemplate{
+	NotificationEmailEventAccountError: {
+		notificationEmailDefaultLocale: {
+			Subject: "[{{site_name}}] Account error - {{account_name}}",
+			HTML:    notificationEmailCard("#dc2626", "Account error", `<p>The upstream account <strong>{{account_name}}</strong> entered an error state and requires attention.</p><p>Account ID: {{account_id}}<br>Platform: {{platform}}<br>Time (UTC): {{event_time}}</p><p>Reason: {{error_message}}</p>`),
+		},
+		notificationEmailLocaleChinese: {
+			Subject: "[{{site_name}}] 账号错误 - {{account_name}}",
+			HTML:    notificationEmailCard("#dc2626", "账号错误通知", `<p>上游账号 <strong>{{account_name}}</strong> 已进入错误状态，请检查处理。</p><p>账号 ID：{{account_id}}<br>平台：{{platform}}<br>时间（UTC）：{{event_time}}</p><p>错误原因：{{error_message}}</p>`),
+		},
+	},
+	NotificationEmailEventNewUserRegistered: {
+		notificationEmailDefaultLocale: {
+			Subject: "[{{site_name}}] New user registration - {{user_email}}",
+			HTML:    notificationEmailCard("#2563eb", "New user registration", `<p>A new user has completed registration.</p><p>User ID: {{user_id}}<br>Username: {{user_name}}<br>Email: {{user_email}}<br>Signup method: {{signup_source}}<br>Time (UTC): {{event_time}}</p>`),
+		},
+		notificationEmailLocaleChinese: {
+			Subject: "[{{site_name}}] 新用户注册 - {{user_email}}",
+			HTML:    notificationEmailCard("#2563eb", "新用户注册通知", `<p>有新用户完成注册。</p><p>用户 ID：{{user_id}}<br>用户名：{{user_name}}<br>邮箱：{{user_email}}<br>注册方式：{{signup_source}}<br>时间（UTC）：{{event_time}}</p>`),
+		},
+	},
 	NotificationEmailEventAuthVerifyCode: {
 		notificationEmailDefaultLocale: {
 			Subject: "[{{site_name}}] Email verification code",

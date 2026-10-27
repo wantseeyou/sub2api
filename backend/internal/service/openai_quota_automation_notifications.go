@@ -15,6 +15,9 @@ import (
 
 // enqueueQuotaPauseNotifications 将管理员停调提醒交给固定邮件 worker，避免阻塞额度处理。
 func (s *OpenAIQuotaAutoResetService) enqueueQuotaPauseNotifications(ctx context.Context, account *Account) {
+	if s.quotaNotifier != nil {
+		s.quotaNotifier.xtuisPush.NotifyQuotaPause(account)
+	}
 	if s.quotaNotifier == nil || s.notificationQueue == nil || s.quotaNotifier.notificationEmailService == nil {
 		return
 	}

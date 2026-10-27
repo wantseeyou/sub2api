@@ -71,6 +71,7 @@ func ProvideAuthService(
 	defaultSubAssigner DefaultSubscriptionAssigner,
 	affiliateService *AffiliateService,
 	userPlatformQuotaRepo UserPlatformQuotaRepository,
+	systemNotifications *SystemNotificationService,
 ) *AuthService {
 	svc := NewAuthService(
 		entClient,
@@ -87,6 +88,7 @@ func ProvideAuthService(
 		affiliateService,
 		userPlatformQuotaRepo,
 	)
+	svc.systemNotifications = systemNotifications
 	svc.SetTencentCaptchaService(tencentCaptchaService)
 	svc.SetAliyunCaptchaService(aliyunCaptchaService)
 	return svc
@@ -984,6 +986,8 @@ var ProviderSet = wire.NewSet(
 	ProvidePaymentService,
 	ProvidePaymentOrderExpiryService,
 	ProvideBalanceNotifyService,
+	ProvideSystemNotificationService,
+	ProvideXtuisPushService,
 	ProvideChannelMonitorService,
 	ProvideChannelMonitorRunner,
 	NewChannelMonitorQuotaFetcher,
@@ -1006,9 +1010,25 @@ func ProvidePaymentConfigService(entClient *dbent.Client, settingRepo SettingRep
 	return NewPaymentConfigService(entClient, settingRepo, []byte(key))
 }
 
+// ProvideSystemNotificationService 将系统通知接入账号错误状态变更。
+func ProvideSystemNotificationService(settings SettingRepository, accounts AccountRepository, email *NotificationEmailService, idempotency *IdempotencyCoordinator, xtuisPush *XtuisPushService) *SystemNotificationService {
+	svc := NewSystemNotificationService(settings, accounts, email, idempotency)
+	svc.xtuisPush = xtuisPush
+	if notifier, ok := accounts.(interface{ SetAccountErrorNotifier(func(int64, string)) }); ok {
+		notifier.SetAccountErrorNotifier(svc.NotifyAccountError)
+	}
+	return svc
+}
+
+// ProvideXtuisPushService 复用账号读取与幂等存储，创建独立推送通道。
+func ProvideXtuisPushService(settings SettingRepository, accounts AccountRepository, idempotency *IdempotencyCoordinator) *XtuisPushService {
+	return NewXtuisPushService(settings, accounts, idempotency)
+}
+
 // ProvideBalanceNotifyService creates BalanceNotifyService
-func ProvideBalanceNotifyService(emailService *EmailService, settingRepo SettingRepository, accountRepo AccountRepository, notificationEmailService *NotificationEmailService) *BalanceNotifyService {
+func ProvideBalanceNotifyService(emailService *EmailService, settingRepo SettingRepository, accountRepo AccountRepository, notificationEmailService *NotificationEmailService, xtuisPush *XtuisPushService) *BalanceNotifyService {
 	svc := NewBalanceNotifyService(emailService, settingRepo, accountRepo)
+	svc.xtuisPush = xtuisPush
 	svc.SetNotificationEmailService(notificationEmailService)
 	return svc
 }

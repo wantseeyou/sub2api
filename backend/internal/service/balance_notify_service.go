@@ -43,6 +43,7 @@ type BalanceNotifyService struct {
 	settingRepo              SettingRepository
 	accountRepo              AccountQuotaReader
 	notificationEmailService *NotificationEmailService
+	xtuisPush                *XtuisPushService // 独立于邮件配置的账号限额推送。
 }
 
 // NewBalanceNotifyService creates a new BalanceNotifyService.
@@ -181,18 +182,30 @@ func buildQuotaDimsFromState(account *Account, state *AccountQuotaState) []quota
 // When quotaState is non-nil (from DB transaction RETURNING), it is used directly for threshold
 // checking, avoiding a separate DB read. Otherwise it falls back to fetching fresh account data.
 func (s *BalanceNotifyService) CheckAccountQuotaAfterIncrement(ctx context.Context, account *Account, cost float64, quotaState *AccountQuotaState) {
-	if account == nil || s.emailService == nil || s.settingRepo == nil || cost <= 0 {
+	if account == nil || s.settingRepo == nil || cost <= 0 {
 		return
 	}
-	if !s.isAccountQuotaNotifyEnabled(ctx) {
+	settings, err := s.settingRepo.GetMultiple(ctx, []string{
+		SettingKeyAccountQuotaNotifyEnabled, SettingKeyAccountQuotaNotifyEmails,
+		SettingKeyXtuisPushEnabled, SettingKeyXtuisPushAccountQuotaEnabled,
+	})
+	if err != nil {
+		slog.Warn("account_quota_notification_settings_failed", "error", err)
 		return
 	}
-	adminEmails := s.getAccountQuotaNotifyEmails(ctx)
-	if len(adminEmails) == 0 {
+	var adminEmails []string
+	if s.emailService != nil && settings[SettingKeyAccountQuotaNotifyEnabled] == "true" {
+		adminEmails = filterVerifiedEmails(ParseNotifyEmails(settings[SettingKeyAccountQuotaNotifyEmails]))
+	}
+	pushEnabled := s.xtuisPush != nil && settings[SettingKeyXtuisPushEnabled] == "true" && settings[SettingKeyXtuisPushAccountQuotaEnabled] == "true"
+	if len(adminEmails) == 0 && !pushEnabled {
 		return
 	}
 
-	siteName := s.getSiteName(ctx)
+	var siteName string
+	if len(adminEmails) > 0 {
+		siteName = s.getSiteName(ctx)
+	}
 	var dims []quotaDim
 	if quotaState != nil {
 		dims = buildQuotaDimsFromState(account, quotaState)
@@ -232,7 +245,10 @@ func (s *BalanceNotifyService) checkQuotaDimCrossings(account *Account, dims []q
 		newUsed := dim.currentUsed
 		oldUsed := dim.currentUsed - cost
 		if oldUsed < effectiveThreshold && newUsed >= effectiveThreshold {
-			s.asyncSendQuotaAlert(adminEmails, account.ID, account.Name, account.Platform, dim, newUsed, effectiveThreshold, siteName)
+			s.xtuisPush.NotifyAccountQuota(account, dim, newUsed, effectiveThreshold)
+			if len(adminEmails) > 0 {
+				s.asyncSendQuotaAlert(adminEmails, account.ID, account.Name, account.Platform, dim, newUsed, effectiveThreshold, siteName)
+			}
 		}
 	}
 }

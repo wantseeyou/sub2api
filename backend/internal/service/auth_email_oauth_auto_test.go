@@ -60,7 +60,7 @@ func TestEmailOAuthAuto_SnapshotsPlatformQuotaDefaults(t *testing.T) {
 		quotaRepo,
 	)
 
-	user, err := svc.createEmailOAuthUser(
+	user, _, err := svc.createEmailOAuthUser(
 		context.Background(),
 		"newoauth@example.com",
 		"newoauth",

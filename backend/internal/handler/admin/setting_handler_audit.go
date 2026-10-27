@@ -574,8 +574,29 @@ func diffSettings(before *service.SystemSettings, after *service.SystemSettings,
 	if before.SubscriptionExpiryNotifyEnabled != after.SubscriptionExpiryNotifyEnabled {
 		changed = append(changed, "subscription_expiry_notify_enabled")
 	}
+	if before.XtuisPushEnabled != after.XtuisPushEnabled {
+		changed = append(changed, "xtuis_push_enabled")
+	}
+	if before.XtuisPushAccountQuotaEnabled != after.XtuisPushAccountQuotaEnabled {
+		changed = append(changed, "xtuis_push_account_quota_enabled")
+	}
+	if before.XtuisPushAccountErrorEnabled != after.XtuisPushAccountErrorEnabled {
+		changed = append(changed, "xtuis_push_account_error_enabled")
+	}
+	if before.XtuisPushNewUserEnabled != after.XtuisPushNewUserEnabled {
+		changed = append(changed, "xtuis_push_new_user_enabled")
+	}
+	if req.XtuisPushTokens != nil {
+		changed = append(changed, "xtuis_push_tokens")
+	}
 	if before.AccountQuotaNotifyEnabled != after.AccountQuotaNotifyEnabled {
 		changed = append(changed, "account_quota_notify_enabled")
+	}
+	if before.AccountErrorNotifyEnabled != after.AccountErrorNotifyEnabled {
+		changed = append(changed, "account_error_notify_enabled")
+	}
+	if before.NewUserNotifyEnabled != after.NewUserNotifyEnabled {
+		changed = append(changed, "new_user_notify_enabled")
 	}
 	if !equalNotifyEmailEntries(before.AccountQuotaNotifyEmails, after.AccountQuotaNotifyEmails) {
 		changed = append(changed, "account_quota_notify_emails")

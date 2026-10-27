@@ -748,6 +748,13 @@ export interface SystemSettings {
   balance_low_notify_recharge_url: string;
   subscription_expiry_notify_enabled: boolean;
   account_quota_notify_enabled: boolean;
+  account_error_notify_enabled: boolean;
+  new_user_notify_enabled: boolean;
+  xtuis_push_enabled: boolean;
+  xtuis_push_account_quota_enabled: boolean;
+  xtuis_push_account_error_enabled: boolean;
+  xtuis_push_new_user_enabled: boolean;
+  xtuis_push_token_count: number;
   account_quota_notify_emails: NotifyEmailEntry[];
 
   // Channel Monitor feature switch
@@ -1062,6 +1069,13 @@ export interface UpdateSettingsRequest {
   balance_low_notify_recharge_url?: string;
   subscription_expiry_notify_enabled?: boolean;
   account_quota_notify_enabled?: boolean;
+  account_error_notify_enabled?: boolean;
+  new_user_notify_enabled?: boolean;
+  xtuis_push_enabled?: boolean;
+  xtuis_push_account_quota_enabled?: boolean;
+  xtuis_push_account_error_enabled?: boolean;
+  xtuis_push_new_user_enabled?: boolean;
+  xtuis_push_tokens?: string[];
   account_quota_notify_emails?: NotifyEmailEntry[];
 
   // Channel Monitor feature switch
