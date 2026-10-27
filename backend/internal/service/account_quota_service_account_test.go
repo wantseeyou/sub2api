@@ -157,6 +157,12 @@ func (s *settingGetValueCounter) GetValue(context.Context, string) (string, erro
 	return "false", nil
 }
 
+// GetMultiple 记录通知设置的批量读取，缺省配置保持通知关闭。
+func (s *settingGetValueCounter) GetMultiple(context.Context, []string) (map[string]string, error) {
+	s.calls++
+	return map[string]string{}, nil
+}
+
 // 未设任何上限的账号没有可跨越的阈值，不应逐请求读取通知设置。
 func TestNotifyAccountQuotaSkipsAccountWithoutLimit(t *testing.T) {
 	tests := []struct {
