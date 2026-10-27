@@ -175,11 +175,11 @@ func (s *XtuisPushService) post(ctx context.Context, token, title, body string) 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("Xtuis request failed (%T)", err)
+		return "", fmt.Errorf("xtuis request failed (%T)", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("Xtuis returned HTTP %d", resp.StatusCode)
+		return "", fmt.Errorf("xtuis returned HTTP %d", resp.StatusCode)
 	}
 	var result struct {
 		Code      int    `json:"code"`   // 平台业务状态码。
@@ -189,7 +189,7 @@ func (s *XtuisPushService) post(ctx context.Context, token, title, body string) 
 		return "", fmt.Errorf("invalid Xtuis response")
 	}
 	if result.Code != http.StatusOK || result.MessageID == "" {
-		return "", fmt.Errorf("Xtuis rejected the notification (code %d)", result.Code)
+		return "", fmt.Errorf("xtuis rejected the notification (code %d)", result.Code)
 	}
 	return result.MessageID, nil
 }
