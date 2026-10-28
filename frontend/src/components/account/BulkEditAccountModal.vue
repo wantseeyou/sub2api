@@ -342,10 +342,16 @@
               </div>
 
               <ModelWhitelistSelector
+                :key="upstreamModelSyncAccountId"
                 v-model="allowedModels"
                 :model-mappings="modelMappings"
                 :platforms="targetSelectedPlatforms"
+                :account-id="upstreamModelSyncAccountId"
               />
+
+              <p v-if="upstreamModelSyncAccountId" class="mb-2 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.accounts.bulkEdit.modelSyncSourceHint', { id: upstreamModelSyncAccountId }) }}
+              </p>
 
               <p class="text-xs text-gray-500 dark:text-gray-400">
                 {{ t('admin.accounts.selectedModels', { count: allowedModels.length }) }}
@@ -1563,6 +1569,7 @@ import {
   resolveOpenAIWSModeHintKey
 } from '@/utils/openaiWsMode'
 import type { OpenAIWSMode } from '@/utils/openaiWsMode'
+import { supportsUpstreamModelSync } from '@/constants/platformCatalog'
 interface Props {
   show: boolean
   accountIds: number[]
@@ -1574,6 +1581,7 @@ interface Props {
     previewCount?: number
     selectedPlatforms?: AccountPlatform[]
     selectedTypes?: AccountType[]
+    modelSyncAccountId?: number // 已确认同平台、同认证方式的模型同步来源账号。
   }
   proxies: ProxyConfig[]
   groups: AdminGroup[]
@@ -1593,6 +1601,17 @@ const targetMode = computed(() => props.target?.mode ?? 'selected')
 const targetPreviewCount = computed(() => props.target?.previewCount ?? props.accountIds.length)
 const targetSelectedPlatforms = computed(() => props.target?.selectedPlatforms ?? props.selectedPlatforms)
 const targetSelectedTypes = computed(() => props.target?.selectedTypes ?? props.selectedTypes)
+// 仅为同平台、同认证方式的目标提供一个模型列表来源。
+const upstreamModelSyncAccountId = computed(() => {
+  if (
+    !props.show ||
+    targetSelectedPlatforms.value.length !== 1 ||
+    targetSelectedTypes.value.length !== 1 ||
+    !supportsUpstreamModelSync(targetSelectedPlatforms.value[0])
+  ) return undefined
+
+  return props.target ? props.target.modelSyncAccountId : props.accountIds[0]
+})
 // Grok 快捷端点仅在所选账号全部为 grok 平台时展示（其他平台不显示）
 const allTargetsGrok = computed(
   () =>

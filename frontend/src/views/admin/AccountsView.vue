@@ -466,7 +466,7 @@
     <ImportDataModal :show="showImportData" @close="showImportData = false" @imported="handleDataImported" />
     <BulkEditAccountModal
       :show="showBulkEdit"
-      :account-ids="selIds"
+      :account-ids="bulkEditTarget?.mode === 'selected' ? bulkEditTarget.accountIds : selIds"
       :selected-platforms="selPlatforms"
       :selected-types="selTypes"
       :target="bulkEditTarget ?? undefined"
@@ -562,6 +562,7 @@ type AccountBulkEditTarget =
       accountIds: number[]
       selectedPlatforms: AccountPlatform[]
       selectedTypes: AccountType[]
+      modelSyncAccountId?: number // 已确认目标类型一致时用于同步模型的账号。
     }
   | {
       mode: 'filtered'
@@ -578,6 +579,7 @@ type AccountBulkEditTarget =
       previewCount: number
       selectedPlatforms: AccountPlatform[]
       selectedTypes: AccountType[]
+      modelSyncAccountId?: number // 已确认筛选目标类型一致时用于同步模型的账号。
     }
 const selPlatforms = computed<AccountPlatform[]>(() => {
   const platforms = new Set(
@@ -1144,6 +1146,20 @@ const {
   rows: accounts,
   getId: (account) => account.id
 })
+
+// 保留已选账号的类型，翻页后仍能校验完整选择；取消选择时一并清理。
+const selectedAccountMetadata = ref(new Map<number, Pick<AccountListItem, 'platform' | 'type'>>())
+watch([accounts, selIds], ([rows, ids]) => {
+  const selected = new Set(ids)
+  const metadata = new Map(selectedAccountMetadata.value)
+  for (const id of metadata.keys()) {
+    if (!selected.has(id)) metadata.delete(id)
+  }
+  for (const account of rows) {
+    if (selected.has(account.id)) metadata.set(account.id, { platform: account.platform, type: account.type })
+  }
+  selectedAccountMetadata.value = metadata
+}, { immediate: true })
 
 const selectingAllResults = ref(false)
 const selectedAllResultIDs = ref<Set<number> | null>(null)
@@ -2111,15 +2127,23 @@ const handleSelectAllResults = async () => {
 
   const requestVersion = ++selectionRequestVersion.value
   const filters = buildBulkEditFilterSnapshot()
+  const metadata = new Map<number, Pick<AccountListItem, 'platform' | 'type'>>()
   selectingAllResults.value = true
   try {
     const ids = await fetchAllAccountIds(
-      (page, pageSize, requestFilters) => adminAPI.accounts.list(page, pageSize, requestFilters),
+      async (page, pageSize, requestFilters) => {
+        const result = await adminAPI.accounts.list(page, pageSize, requestFilters)
+        for (const account of result.items) {
+          metadata.set(account.id, { platform: account.platform, type: account.type })
+        }
+        return result
+      },
       filters
     )
     if (requestVersion !== selectionRequestVersion.value) return
 
     setSelectedIds(ids)
+    selectedAccountMetadata.value = metadata
     selectedAllResultIDs.value = new Set(ids)
   } catch (error) {
     if (requestVersion !== selectionRequestVersion.value) return
@@ -2132,18 +2156,21 @@ const handleSelectAllResults = async () => {
   }
 }
 
-const collectSelectionMetadata = (rows: Account[]) => {
+const collectSelectionMetadata = (rows: Pick<AccountListItem, 'platform' | 'type'>[]) => {
   const selectedPlatforms = Array.from(new Set(rows.map(account => account.platform)))
   const selectedTypes = Array.from(new Set(rows.map(account => account.type)))
   return { selectedPlatforms, selectedTypes }
 }
 
 const openBulkEditSelected = () => {
+  const metadata = collectSelectionMetadata(Array.from(selectedAccountMetadata.value.values()))
   bulkEditTarget.value = {
     mode: 'selected',
     accountIds: [...selIds.value],
-    selectedPlatforms: [...selPlatforms.value],
-    selectedTypes: [...selTypes.value]
+    ...metadata,
+    modelSyncAccountId: selIds.value.every(id => selectedAccountMetadata.value.has(id))
+      ? selIds.value[0]
+      : undefined
   }
   showBulkEdit.value = true
 }
@@ -2152,12 +2179,15 @@ const openBulkEditFiltered = async () => {
   const filters = buildBulkEditFilterSnapshot()
   const preview = await adminAPI.accounts.list(1, 100, filters)
   const { selectedPlatforms, selectedTypes } = collectSelectionMetadata(preview.items)
+  const typeConfirmed = preview.items.length === preview.total ||
+    (filters.platform === selectedPlatforms[0] && filters.type === selectedTypes[0])
   bulkEditTarget.value = {
     mode: 'filtered',
     filters,
     previewCount: preview.total,
     selectedPlatforms,
-    selectedTypes
+    selectedTypes,
+    modelSyncAccountId: typeConfirmed ? preview.items[0]?.id : undefined
   }
   showBulkEdit.value = true
 }

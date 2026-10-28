@@ -52,7 +52,7 @@ func isOpenAIQuotaThresholdPaused(account *Account, now time.Time) bool {
 		IsAccountSchedulingThresholdReason(account.TempUnschedulableReason)
 }
 
-// evaluateGlobalQuotaAutomation 先确认真实归零，再按统一停调阈值决定是否用卡。
+// evaluateGlobalQuotaAutomation 先确认真实用量回落或归零，再按统一停调阈值决定是否用卡。
 func (s *OpenAIQuotaAutoResetService) evaluateGlobalQuotaAutomation(ctx context.Context, account *Account, policy OpenAIQuotaAutomationSettings) (bool, error) {
 	handled := policy.UsesGlobalReset()
 	repo, ok := s.accountRepo.(openAIQuotaAutomationRepository)
@@ -74,8 +74,11 @@ func (s *OpenAIQuotaAutoResetService) evaluateGlobalQuotaAutomation(ctx context.
 		return true, err
 	}
 	if policy.AutoRecoverEnabled {
-		if cycle, recover := openAIQuotaZeroRecoveryCycle(account, usage, now); recover {
-			updates[OpenAIQuotaZeroRecoveryExtraKey] = cycle
+		cycle, recover := openAIQuotaZeroRecoveryCycle(account, usage, now)
+		if openAIQuotaPauseUsageDecreased(account, usage) || recover {
+			if cycle != "" {
+				updates[OpenAIQuotaZeroRecoveryExtraKey] = cycle
+			}
 			_, err := s.recoverGlobalOpenAIQuotaPause(ctx, account, updates)
 			return true, err
 		}
@@ -170,6 +173,29 @@ func buildGlobalOpenAIQuotaUpdates(usage *OpenAIQuotaUsage, now time.Time) map[s
 	return updates
 }
 
+// openAIQuotaPauseUsageDecreased 将上游真实用量与本次停调基线比较，避免扫描覆盖缓存后漏掉恢复。
+func openAIQuotaPauseUsageDecreased(account *Account, usage *OpenAIQuotaUsage) bool {
+	pause, ok := parseTempUnschedReasonPayload(account.TempUnschedulableReason)
+	if !ok || pause.Source != AccountSchedulingThresholdReasonSource || pause.UsedPercent <= 0 {
+		return false
+	}
+	var windowSeconds int64
+	switch pause.Window {
+	case "5h":
+		windowSeconds = 5 * 60 * 60
+	case "7d":
+		windowSeconds = 7 * 24 * 60 * 60
+	default:
+		return false
+	}
+	for _, window := range []*OpenAIRateLimitWindow{usage.RateLimit.PrimaryWindow, usage.RateLimit.SecondaryWindow} {
+		if window != nil && window.usedPercentKnown && window.LimitWindowSeconds == windowSeconds && window.UsedPercent < pause.UsedPercent {
+			return true
+		}
+	}
+	return false
+}
+
 // openAIQuotaZeroRecoveryCycle 只使用明确存在的真实七日用量识别尚未处理的归零。
 func openAIQuotaZeroRecoveryCycle(account *Account, usage *OpenAIQuotaUsage, now time.Time) (string, bool) {
 	if usage == nil || usage.RateLimit == nil {
@@ -189,7 +215,11 @@ func openAIQuotaZeroRecoveryCycle(account *Account, usage *OpenAIQuotaUsage, now
 			return cycle, true
 		}
 		previousReset, err := strconv.ParseInt(fmt.Sprint(previous), 10, 64)
-		return cycle, err == nil && previousReset > 0 && now.Unix() >= previousReset && resetAt > previousReset
+		if err != nil || previousReset <= 0 || resetAt <= previousReset {
+			return cycle, false
+		}
+		// 上游明确返回的新周期可提前恢复；相对时间推算仍须等旧周期结束，避免漂移造成重复恢复。
+		return cycle, window.ResetAt > 0 || now.Unix() >= previousReset
 	}
 	return "", false
 }

@@ -485,7 +485,7 @@ export default {
         title: 'OpenAI OAuth quota automation',
         description: 'Applies to all enabled OpenAI OAuth accounts without individual opt-in. All switches default to off. Uses the platform scheduling threshold and account overrides.',
         recover: 'Automatically recover quota pauses',
-        recoverHint: 'Checks paused accounts every minute. Clears a quota pause once when fresh 7-day usage reaches zero, regardless of 5-hour usage. Normal scheduling rules can pause the account again.',
+        recoverHint: 'Checks paused accounts every minute. Clears the quota pause when fresh usage in the paused 5-hour or 7-day window falls below its value at the time of the pause, or a new 7-day zero-usage event is confirmed. Scheduling rules may pause the account again if usage still reaches the threshold.',
         expiry: 'Automatically use expiring reset credits',
         expiryHint: 'After an account reaches its scheduling threshold and is paused, use the soonest-expiring credit within the expiry window. Do not consume before the account is paused.',
         expiryDays: 'Days before expiry (1–365)',

@@ -15,7 +15,7 @@ const SettingKeyOpenAIQuotaAutomation = "openai_quota_automation"
 
 // OpenAIQuotaAutomationSettings 定义 OpenAI OAuth 账号的全局额度自动化规则。
 type OpenAIQuotaAutomationSettings struct {
-	AutoRecoverEnabled    bool `json:"auto_recover_enabled"`    // 上游 7 日用量归零后自动解除额度停调。
+	AutoRecoverEnabled    bool `json:"auto_recover_enabled"`    // 上游停调窗口用量回落或七日归零后自动解除额度停调。
 	ExpiryResetEnabled    bool `json:"expiry_reset_enabled"`    // 达到停调阈值后优先使用临期卡。
 	ExpiryDays            int  `json:"expiry_days"`             // 重置卡到期前多少天视为临期。
 	ThresholdResetEnabled bool `json:"threshold_reset_enabled"` // 达到停调阈值后自动使用有效重置卡。

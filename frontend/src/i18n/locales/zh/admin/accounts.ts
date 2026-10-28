@@ -744,6 +744,7 @@ export default {
         selectionInfo: '已选择 {count} 个账号。只更新您勾选或填写的字段，未勾选的字段保持不变。',
         baseUrlPlaceholder: 'https://api.anthropic.com 或 https://api.openai.com',
         baseUrlNotice: '适用于 API Key 账号及 Grok OAuth 账号的转发端点，留空则不修改',
+        modelSyncSourceHint: '从账号 #{id} 获取上游模型列表，提交后将当前白名单统一应用到本次批量编辑的账号。',
         submit: '批量更新',
         updating: '更新中...',
         success: '成功更新 {count} 个账号',

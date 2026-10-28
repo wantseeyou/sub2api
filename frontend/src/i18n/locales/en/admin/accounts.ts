@@ -625,6 +625,7 @@ export default {
           '{count} account(s) selected. Only checked or filled fields will be updated; others stay unchanged.',
         baseUrlPlaceholder: 'https://api.anthropic.com or https://api.openai.com',
         baseUrlNotice: 'Applies to API Key accounts and the forwarding endpoint of Grok OAuth accounts; leave empty to keep existing value',
+        modelSyncSourceHint: 'Fetch upstream models from account #{id}. Saving applies the current whitelist to all accounts in this bulk edit.',
         submit: 'Update Accounts',
         updating: 'Updating...',
         success: 'Updated {count} account(s)',
