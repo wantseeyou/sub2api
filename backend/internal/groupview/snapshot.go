@@ -5,6 +5,17 @@ import (
 	"strings"
 )
 
+// resetCreditsProjection 仅读取缓存的重置卡数量和到期时间，剥离上游卡标识及其他字段。
+func resetCreditsProjection() string {
+	const snapshot = "a.extra->'codex_reset_credit_snapshot'"
+	return `(CASE WHEN a.platform = 'openai' AND a.type = 'oauth' AND jsonb_typeof(` + snapshot + `) = 'object'
+        THEN jsonb_build_object('available_count', ` + snapshotNumber(snapshot+"->'available_count'") + `,
+            'credits', (SELECT COALESCE(jsonb_agg(jsonb_build_object('expires_at', credit->'expires_at')), '[]'::jsonb)
+                FROM jsonb_array_elements(CASE WHEN jsonb_typeof(` + snapshot + `->'credits') = 'array'
+                    THEN ` + snapshot + `->'credits' ELSE '[]'::jsonb END) AS credit
+                WHERE jsonb_typeof(credit->'expires_at') = 'string')) END)`
+}
+
 // snapshotNumber 仅读取 JSON 数字，避免异常快照触发 SQL 类型转换错误。
 func snapshotNumber(expression string) string {
 	return fmt.Sprintf("(CASE WHEN jsonb_typeof(%[1]s) = 'number' THEN (%[1]s #>> '{}')::numeric END)", expression)

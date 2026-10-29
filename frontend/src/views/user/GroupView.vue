@@ -70,18 +70,19 @@
           </label>
         </div>
         <DataTable :key="tab" :columns="columns" :data="rows" :loading="loading" server-side-sort :default-sort-key="sortBy" :default-sort-order="sortOrder" @sort="sort">
-          <template #cell-schedulable="{ value }">{{ value ? t('groupView.yes') : t('groupView.no') }}</template>
+          <template #cell-status="{ value }">
+            <span class="badge" :class="value === 'active' ? 'badge-success' : value === 'error' ? 'badge-danger' : 'badge-gray'">{{ t(`admin.accounts.status.${value}`) }}</span>
+          </template>
+          <template #cell-schedulable="{ row }">
+            <div class="min-w-32 space-y-1">
+              <span class="badge" :class="row.schedulable ? 'badge-success' : row.scheduling_state === 'disabled' || row.status === 'inactive' ? 'badge-gray' : 'badge-warning'">{{ t(`groupView.schedulingStates.${row.scheduling_state || (row.schedulable ? 'available' : 'disabled')}`) }}</span>
+              <p class="text-[10px] text-gray-400">{{ row.scheduling_enabled ? t('groupView.schedulingEnabled') : t('groupView.schedulingDisabled') }}</p>
+              <p v-if="row.scheduling_until" class="text-[10px] text-gray-400">{{ t('groupView.schedulingUntil') }}: {{ dateTime(row.scheduling_until) }}</p>
+            </div>
+          </template>
           <template #cell-groups="{ row }">{{ row.groups?.map((group: ViewGroup) => group.name).join(', ') }}</template>
           <template #cell-quota="{ row }">
-            <div class="min-w-52 space-y-2 text-xs">
-              <p class="font-medium text-amber-600">{{ t('groupView.sharedQuota') }}</p>
-              <p v-if="!row.quota?.length" class="text-gray-500">{{ t('groupView.noSnapshot') }}</p>
-              <div v-for="quota in row.quota" :key="quota.name">
-                <div>{{ quota.name }} · {{ t('groupView.remaining') }} {{ Math.max(0, 100 - quota.used_percent).toFixed(1) }}%</div>
-                <div class="text-gray-500">{{ t('groupView.resetsAt') }}: {{ dateTime(quota.resets_at) }}</div>
-                <div class="text-gray-500">{{ t('groupView.updatedAt') }}: {{ dateTime(quota.updated_at) }}</div>
-              </div>
-            </div>
+            <GroupViewAccountUsage :account="row" />
           </template>
           <template #cell-cost="{ value }">{{ money(value) }}</template>
           <template #cell-created_at="{ value }">{{ dateTime(value) }}</template>
@@ -102,6 +103,7 @@ import type { Column } from '@/components/common/types'
 import Pagination from '@/components/common/Pagination.vue'
 import TokenUsageTrend from '@/components/charts/TokenUsageTrend.vue'
 import GroupViewResourceFilter from '@/components/user/GroupViewResourceFilter.vue'
+import GroupViewAccountUsage from '@/components/user/GroupViewAccountUsage.vue'
 import { getAccess, getSummary, listView, type ViewGroup, type ViewParams, type ViewRow, type ViewSummary, type ViewTab } from '@/api/groupView'
 import { getConfiguredTablePageSizeOptions } from '@/utils/tablePreferences'
 

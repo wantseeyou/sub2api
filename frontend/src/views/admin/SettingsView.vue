@@ -1,6 +1,6 @@
 <template>
   <AppLayout>
-    <div class="mx-auto max-w-6xl space-y-6">
+    <div class="mx-auto min-w-0 max-w-6xl space-y-6">
       <!-- Loading State -->
       <div v-if="loading" class="flex items-center justify-center py-12">
         <div
@@ -6371,6 +6371,17 @@
               </div>
               <div class="flex items-start justify-between gap-4">
                 <div>
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.settings.openaiQuotaAutomation.expiryForce") }}</label>
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.settings.openaiQuotaAutomation.expiryForceHint") }}</p>
+                </div>
+                <Toggle v-model="form.openai_quota_automation.expiry_force_reset_enabled" data-testid="openai-quota-expiry-force-reset" />
+              </div>
+              <div v-if="form.openai_quota_automation.expiry_force_reset_enabled" class="max-w-xs">
+                <label for="openai-quota-expiry-force-minutes" class="input-label">{{ t("admin.settings.openaiQuotaAutomation.expiryForceMinutes") }}</label>
+                <input id="openai-quota-expiry-force-minutes" v-model.number="form.openai_quota_automation.expiry_force_minutes" type="number" min="1" max="1440" step="1" class="input" />
+              </div>
+              <div class="flex items-start justify-between gap-4">
+                <div>
                   <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.settings.openaiQuotaAutomation.threshold") }}</label>
                   <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.settings.openaiQuotaAutomation.thresholdHint") }}</p>
                 </div>
@@ -11933,6 +11944,9 @@ async function saveSettings() {
     if (!Number.isInteger(form.openai_quota_automation.expiry_days) || form.openai_quota_automation.expiry_days < 1 || form.openai_quota_automation.expiry_days > 365) {
       throw new Error(t("admin.settings.openaiQuotaAutomation.expiryDaysInvalid"));
     }
+    if (form.openai_quota_automation.expiry_force_reset_enabled && (!Number.isInteger(form.openai_quota_automation.expiry_force_minutes) || form.openai_quota_automation.expiry_force_minutes < 1 || form.openai_quota_automation.expiry_force_minutes > 1440)) {
+      throw new Error(t("admin.settings.openaiQuotaAutomation.expiryForceMinutesInvalid"));
+    }
     payload.openai_quota_automation = { ...form.openai_quota_automation };
     appendAuthSourceDefaultsToUpdateRequest(payload, authSourceDefaults);
 
@@ -13423,17 +13437,35 @@ watch(
 }
 
 .settings-tabs-scroll {
-  @apply overflow-x-auto;
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+  @apply max-w-full overflow-x-auto pb-2;
+  scrollbar-width: auto;
+  scrollbar-color: auto;
 }
 
 .settings-tabs-scroll::-webkit-scrollbar {
-  display: none;
+  display: block;
+  height: 6px;
+}
+
+.settings-tabs-scroll::-webkit-scrollbar-track {
+  border-radius: 9999px;
+  background: rgb(148 163 184 / 0.12);
+}
+
+.settings-tabs-scroll::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: rgb(148 163 184 / 0.7);
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  .settings-tabs-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(148 163 184 / 0.7) transparent;
+  }
 }
 
 .settings-tabs {
-  @apply flex min-w-max items-center gap-1;
+  @apply flex w-max min-w-full items-center gap-1;
 }
 
 .settings-tab {
@@ -13441,12 +13473,8 @@ watch(
 }
 
 @media (min-width: 768px) {
-  .settings-tabs {
-    @apply min-w-full;
-  }
-
   .settings-tab {
-    @apply min-w-0 flex-1 basis-0 overflow-hidden px-2 text-[13px];
+    @apply px-3 text-[13px];
   }
 
   .settings-tab-icon {
@@ -13505,7 +13533,7 @@ watch(
 }
 
 .settings-tab-label {
-  @apply min-w-0 overflow-hidden text-ellipsis whitespace-nowrap leading-none;
+  @apply whitespace-nowrap leading-none;
 }
 </style>
 

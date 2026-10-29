@@ -31,6 +31,16 @@ export default {
   remaining: 'Remaining',
   resetsAt: 'Resets at',
   updatedAt: 'Snapshot at',
+  windowRequests: 'Req',
+  creditExpires: 'Expires in {time}',
+  schedulingEnabled: 'Scheduling: enabled',
+  schedulingDisabled: 'Scheduling: disabled',
+  schedulingUntil: 'Restricted until',
+  schedulingStates: {
+    available: 'Schedulable', disabled: 'Scheduling disabled', inactive: 'Account inactive', error: 'Account error',
+    expired: 'Account expired', overloaded: '529 overloaded', rate_limited: '429 rate limited',
+    quota_paused: 'Quota paused', temp_unschedulable: 'Temporarily unavailable', quota_exceeded: 'Quota exceeded'
+  },
   noAccess: 'You have no active group view grants.',
   loadFailed: 'Unable to load data. Please retry.',
   saveFailed: 'Unable to save access. Please retry.',

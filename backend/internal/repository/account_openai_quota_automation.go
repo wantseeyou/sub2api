@@ -12,8 +12,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
-// ListOpenAIQuotaAutomationCandidateIDs 按主键分页查询旧策略账号及额度停调账号。
-func (r *accountRepository) ListOpenAIQuotaAutomationCandidateIDs(ctx context.Context, afterID int64, limit int, includePaused bool) ([]int64, error) {
+// ListOpenAIQuotaAutomationCandidateIDs 按主键分页查询旧策略、额度停调及临期保底用卡账号。
+func (r *accountRepository) ListOpenAIQuotaAutomationCandidateIDs(ctx context.Context, afterID int64, limit int, includePaused, includeActive bool) ([]int64, error) {
 	query := r.client.Account.Query().Where(
 		dbaccount.IDGT(afterID), dbaccount.PlatformEQ(service.PlatformOpenAI),
 		dbaccount.TypeEQ(service.AccountTypeOAuth), dbaccount.StatusEQ(service.StatusActive),
@@ -21,6 +21,10 @@ func (r *accountRepository) ListOpenAIQuotaAutomationCandidateIDs(ctx context.Co
 	)
 	query.Where(func(s *entsql.Selector) {
 		now := time.Now()
+		if includeActive {
+			s.Where(entsql.Or(entsql.IsNull(s.C(dbaccount.FieldExpiresAt)), entsql.GT(s.C(dbaccount.FieldExpiresAt), now), entsql.EQ(s.C(dbaccount.FieldAutoPauseOnExpired), false)))
+			return
+		}
 		legacy := entsql.And(
 			entsql.ExprP("extra ->> 'auto_reset_credit_enabled' IN ('true', '1')"),
 			entsql.Or(entsql.IsNull(s.C(dbaccount.FieldRateLimitResetAt)), entsql.LTE(s.C(dbaccount.FieldRateLimitResetAt), now)),
@@ -36,6 +40,32 @@ func (r *accountRepository) ListOpenAIQuotaAutomationCandidateIDs(ctx context.Co
 		}
 	})
 	return query.Order(dbaccount.ByID()).Limit(limit).IDs(ctx)
+}
+
+// CompareAndSwapOpenAIAutoResetState 仅替换本次观察到的核销状态，防止跨卡并发回写丢失待确认结果。
+func (r *accountRepository) CompareAndSwapOpenAIAutoResetState(ctx context.Context, id int64, previous any, state *service.OpenAIAutoResetCreditState) (bool, error) {
+	before, err := json.Marshal(previous)
+	if err != nil {
+		return false, fmt.Errorf("marshal previous reset state: %w", err)
+	}
+	after, err := json.Marshal(state)
+	if err != nil {
+		return false, fmt.Errorf("marshal next reset state: %w", err)
+	}
+	result, err := r.sql.ExecContext(ctx, `UPDATE accounts
+		SET extra = COALESCE(extra, '{}'::jsonb) || jsonb_build_object($2::text, $4::jsonb), updated_at = NOW()
+		WHERE id = $1 AND deleted_at IS NULL
+			AND COALESCE(extra -> $2::text, 'null'::jsonb) = $3::jsonb`,
+		id, service.OpenAIAutoResetCreditStateExtraKey, string(before), string(after))
+	if err != nil {
+		return false, err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil || affected == 0 {
+		return false, err
+	}
+	r.syncSchedulerAccountSnapshotDetached(ctx, id)
+	return true, nil
 }
 
 // UpdateOpenAIQuotaAutomationSnapshot 原子复核查询快照，更新额度并按需解除匹配的停调。

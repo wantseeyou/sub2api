@@ -13,6 +13,11 @@ export interface QuotaWindow {
   updated_at?: string | null // 快照采样时间。
 }
 
+export interface ViewResetCredits {
+  available_count: number | null // 缓存中的可用重置卡次数，缺失时未知。
+  credits: { expires_at: string }[] // 仅保留卡片到期时间。
+}
+
 export interface ViewRow {
   id: number // 当前行标识。
   name?: string // 账号或人员名称。
@@ -21,6 +26,10 @@ export interface ViewRow {
   type?: string // 上游账号类型。
   status?: string // 上游账号状态。
   schedulable?: boolean // 当前可调度状态。
+  scheduling_enabled?: boolean // 管理员配置的调度开关。
+  scheduling_state?: string // 脱敏后的实际调度状态。
+  scheduling_until?: string | null // 当前调度限制的截止时间。
+  reset_credits?: ViewResetCredits | null // 仅供展示的重置卡缓存。
   groups?: ViewGroup[] // 本次所选的可见分组。
   quota?: QuotaWindow[] // 共享上游额度快照。
   requests?: number // 组内请求数。

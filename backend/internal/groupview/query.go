@@ -130,6 +130,7 @@ func (s *Store) Accounts(ctx context.Context, f Filter) (items []json.RawMessage
 	// 调度判断仅取所需标量和站内配额，绝不读取凭据或输出内部配额。
 	projection := `a.id, a.name, a.platform, a.type, a.status, a.schedulable,
         a.auto_pause_on_expired, a.expires_at, a.rate_limit_reset_at, a.overload_until, a.temp_unschedulable_until,
+        COALESCE(a.temp_unschedulable_reason, ''),
         jsonb_build_object('quota_limit',a.extra->'quota_limit','quota_used',a.extra->'quota_used',
             'quota_daily_limit',a.extra->'quota_daily_limit','quota_daily_used',a.extra->'quota_daily_used',
             'quota_daily_start',a.extra->'quota_daily_start','quota_daily_reset_mode',a.extra->'quota_daily_reset_mode',
@@ -139,7 +140,7 @@ func (s *Store) Accounts(ctx context.Context, f Filter) (items []json.RawMessage
             'quota_weekly_reset_hour',a.extra->'quota_weekly_reset_hour','quota_reset_timezone',a.extra->'quota_reset_timezone'),
         (SELECT jsonb_agg(jsonb_build_object('id', g.id, 'name', g.name) ORDER BY g.id)
             FROM account_groups ag JOIN groups g ON g.id = ag.group_id
-            WHERE ag.account_id = a.id AND g.id = ANY($1::bigint[]) AND g.deleted_at IS NULL), ` + quotaProjection()
+            WHERE ag.account_id = a.id AND g.id = ANY($1::bigint[]) AND g.deleted_at IS NULL), ` + quotaProjection() + `, ` + resetCreditsProjection()
 	args = append(args, f.PageSize, (f.Page-1)*f.PageSize)
 	rows, err := s.db.QueryContext(ctx, fmt.Sprintf("SELECT %s%s ORDER BY %s%s, a.id LIMIT $%d OFFSET $%d", projection, from, order, direction, len(args)-1, len(args)), args...)
 	if err != nil {
@@ -149,22 +150,53 @@ func (s *Store) Accounts(ctx context.Context, f Filter) (items []json.RawMessage
 	items = make([]json.RawMessage, 0)
 	for rows.Next() {
 		var a service.Account
-		var extra, groups, quota []byte
+		var extra, groups, quota, resetCredits []byte
 		if err := rows.Scan(&a.ID, &a.Name, &a.Platform, &a.Type, &a.Status, &a.Schedulable, &a.AutoPauseOnExpired, &a.ExpiresAt,
-			&a.RateLimitResetAt, &a.OverloadUntil, &a.TempUnschedulableUntil, &extra, &groups, &quota); err != nil {
+			&a.RateLimitResetAt, &a.OverloadUntil, &a.TempUnschedulableUntil, &a.TempUnschedulableReason, &extra, &groups, &quota, &resetCredits); err != nil {
 			return nil, 0, err
 		}
 		if err := json.Unmarshal(extra, &a.Extra); err != nil {
 			return nil, 0, err
 		}
+		state, until := accountSchedulingState(&a, time.Now())
 		item, err := json.Marshal(map[string]any{"id": a.ID, "name": a.Name, "platform": a.Platform, "type": a.Type, "status": a.Status,
-			"schedulable": a.IsSchedulable(), "groups": json.RawMessage(groups), "quota": json.RawMessage(quota)})
+			"schedulable": a.IsSchedulable(), "scheduling_enabled": a.Schedulable, "scheduling_state": state, "scheduling_until": until,
+			"groups": json.RawMessage(groups), "quota": json.RawMessage(quota), "reset_credits": json.RawMessage(resetCredits)})
 		if err != nil {
 			return nil, 0, err
 		}
 		items = append(items, item)
 	}
 	return items, total, rows.Err()
+}
+
+// accountSchedulingState 将账号内部停调原因映射为可公开的固定状态及限制截止时间。
+func accountSchedulingState(account *service.Account, now time.Time) (string, *time.Time) {
+	if !account.IsActive() {
+		return account.Status, nil
+	}
+	if !account.Schedulable {
+		return "disabled", nil
+	}
+	if account.AutoPauseOnExpired && account.ExpiresAt != nil && !account.ExpiresAt.After(now) {
+		return "expired", account.ExpiresAt
+	}
+	if account.OverloadUntil != nil && account.OverloadUntil.After(now) {
+		return "overloaded", account.OverloadUntil
+	}
+	if account.RateLimitResetAt != nil && account.RateLimitResetAt.After(now) {
+		return "rate_limited", account.RateLimitResetAt
+	}
+	if account.TempUnschedulableUntil != nil && account.TempUnschedulableUntil.After(now) {
+		if service.IsAccountSchedulingThresholdReason(account.TempUnschedulableReason) {
+			return "quota_paused", account.TempUnschedulableUntil
+		}
+		return "temp_unschedulable", account.TempUnschedulableUntil
+	}
+	if account.SupportsAccountQuota() && account.IsQuotaExceeded() {
+		return "quota_exceeded", nil
+	}
+	return "available", nil
 }
 
 // People 仅聚合所选时段内实际产生授权组用量的人员。

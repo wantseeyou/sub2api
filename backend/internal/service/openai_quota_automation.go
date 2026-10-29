@@ -12,10 +12,12 @@ import (
 )
 
 const OpenAIQuotaZeroRecoveryExtraKey = "codex_7d_zero_recovery"
+const openAIQuotaExpiryResetTrigger = "expiry"
 
 type openAIQuotaAutomationRepository interface {
-	ListOpenAIQuotaAutomationCandidateIDs(context.Context, int64, int, bool) ([]int64, error)
+	ListOpenAIQuotaAutomationCandidateIDs(context.Context, int64, int, bool, bool) ([]int64, error)
 	UpdateOpenAIQuotaAutomationSnapshot(context.Context, *Account, map[string]any, bool) (bool, error)
+	CompareAndSwapOpenAIAutoResetState(context.Context, int64, any, *OpenAIAutoResetCreditState) (bool, error)
 }
 
 // scanQuotaAutomationCandidates 以主键分页补偿暂停账号和旧账号级自动用卡任务。
@@ -29,7 +31,7 @@ func (s *OpenAIQuotaAutoResetService) scanQuotaAutomationCandidates(ctx context.
 		(s.quotaNotifier != nil && (s.quotaNotifier.isAccountQuotaNotifyEnabled(ctx) || s.quotaNotifier.xtuisPush.IsAccountQuotaEnabled(ctx)))
 	var afterID int64
 	for ctx.Err() == nil {
-		ids, err := repo.ListOpenAIQuotaAutomationCandidateIDs(ctx, afterID, openAIAutoResetBatchSize, includePaused)
+		ids, err := repo.ListOpenAIQuotaAutomationCandidateIDs(ctx, afterID, openAIAutoResetBatchSize, includePaused, policy.ExpiryForceResetEnabled)
 		if err != nil {
 			slog.Warn("openai_quota_automation_scan_failed", "error", err)
 			return
@@ -52,7 +54,26 @@ func isOpenAIQuotaThresholdPaused(account *Account, now time.Time) bool {
 		IsAccountSchedulingThresholdReason(account.TempUnschedulableReason)
 }
 
-// evaluateGlobalQuotaAutomation 先确认真实用量回落或归零，再按统一停调阈值决定是否用卡。
+// isOpenAIQuotaExpiryResetAccount 允许正常账号及额度停调账号使用临期卡，保留人工停用和其他故障。
+func isOpenAIQuotaExpiryResetAccount(account *Account, now time.Time) bool {
+	return isOpenAIAutoResetCreditAccount(account) && account.IsActive() && account.Schedulable &&
+		(!account.AutoPauseOnExpired || account.ExpiresAt == nil || account.ExpiresAt.After(now)) &&
+		(account.RateLimitResetAt == nil || !account.RateLimitResetAt.After(now)) &&
+		(account.OverloadUntil == nil || !account.OverloadUntil.After(now)) &&
+		(account.TempUnschedulableUntil == nil || !account.TempUnschedulableUntil.After(now) ||
+			IsAccountSchedulingThresholdReason(account.TempUnschedulableReason))
+}
+
+// openAIQuotaExpiryResetDue 仅在上游完整确认最早有效卡即将过期时触发无条件用卡。
+func openAIQuotaExpiryResetDue(policy OpenAIQuotaAutomationSettings, usage *OpenAIQuotaUsage, now time.Time) bool {
+	if !policy.ExpiryForceResetEnabled || usage == nil || usage.RateLimitResetCredits == nil {
+		return false
+	}
+	candidate, err := selectOpenAIAutoResetCandidate(usage.autoResetCandidates, usage.RateLimitResetCredits.AvailableCount, nil, "")
+	return err == nil && forceExpiryResetCreditEligible(policy, candidate, now)
+}
+
+// evaluateGlobalQuotaAutomation 优先核对临期保底用卡，再处理额度恢复及达到停调阈值后的用卡。
 func (s *OpenAIQuotaAutoResetService) evaluateGlobalQuotaAutomation(ctx context.Context, account *Account, policy OpenAIQuotaAutomationSettings) (bool, error) {
 	handled := policy.UsesGlobalReset()
 	repo, ok := s.accountRepo.(openAIQuotaAutomationRepository)
@@ -73,7 +94,13 @@ func (s *OpenAIQuotaAutoResetService) evaluateGlobalQuotaAutomation(ctx context.
 	if err != nil {
 		return true, err
 	}
-	if policy.AutoRecoverEnabled {
+	previous := openAIAutoResetStateFromExtra(account.Extra)
+	pendingExpiry := hasPendingOpenAIAutoResetAttempt(previous) && previous.TriggerWindow == openAIQuotaExpiryResetTrigger
+	forceReset := isOpenAIQuotaExpiryResetAccount(account, now) && openAIQuotaExpiryResetDue(policy, usage, now)
+	if hasPendingOpenAIAutoResetAttempt(previous) && !pendingExpiry {
+		forceReset = false
+	}
+	if policy.AutoRecoverEnabled && isOpenAIQuotaThresholdPaused(account, now) && !forceReset && !pendingExpiry {
 		cycle, recover := openAIQuotaZeroRecoveryCycle(account, usage, now)
 		if openAIQuotaPauseUsageDecreased(account, usage) || recover {
 			if cycle != "" {
@@ -94,14 +121,27 @@ func (s *OpenAIQuotaAutoResetService) evaluateGlobalQuotaAutomation(ctx context.
 		return handled, nil
 	}
 	account, err = s.accountRepo.GetByID(ctx, account.ID)
-	if err != nil || !isOpenAIQuotaThresholdPaused(account, time.Now()) {
+	if err != nil || account == nil {
 		return true, err
 	}
+	now = time.Now()
+	paused := isOpenAIQuotaThresholdPaused(account, now)
+	if !paused && !isOpenAIQuotaExpiryResetAccount(account, now) {
+		return true, nil
+	}
+	previous = openAIAutoResetStateFromExtra(account.Extra)
+	pendingExpiry = hasPendingOpenAIAutoResetAttempt(previous) && previous.TriggerWindow == openAIQuotaExpiryResetTrigger
+	forceReset = isOpenAIQuotaExpiryResetAccount(account, now) && openAIQuotaExpiryResetDue(policy, usage, now)
+	if hasPendingOpenAIAutoResetAttempt(previous) && !pendingExpiry {
+		forceReset = false
+	}
+	if !paused && !forceReset && !pendingExpiry {
+		return true, nil
+	}
 	decision := s.evaluateConfirmedQuotaThreshold(ctx, account, usage, now)
-	previous := openAIAutoResetStateFromExtra(account.Extra)
 	canReplay := previous != nil && previous.AttemptCreditHash != "" &&
-		(previous.AttemptCycleHash == shortOpenAIAutoResetHash("pause:"+account.TempUnschedulableReason) || hasPendingOpenAIAutoResetAttempt(previous))
-	if !decision.ShouldPause && !canReplay {
+		((paused && previous.AttemptCycleHash == shortOpenAIAutoResetHash("pause:"+account.TempUnschedulableReason)) || hasPendingOpenAIAutoResetAttempt(previous))
+	if !forceReset && !decision.ShouldPause && !canReplay {
 		return true, nil
 	}
 	if usage.RateLimitResetCredits == nil {
@@ -111,21 +151,27 @@ func (s *OpenAIQuotaAutoResetService) evaluateGlobalQuotaAutomation(ctx context.
 		Status: OpenAIAutoResetStatusChecking, TriggerWindow: decision.Window,
 		AvailableCount: usage.RateLimitResetCredits.AvailableCount, CheckedAt: now.UTC().Format(time.RFC3339),
 	}
+	if forceReset || pendingExpiry {
+		checking.TriggerWindow = openAIQuotaExpiryResetTrigger
+	}
 	copyOpenAIAutoResetAttempt(checking, previous)
 	if hasPendingOpenAIAutoResetAttempt(previous) {
 		checking.Status = previous.Status
 	}
 	if checking.AvailableCount <= 0 && !canReplay {
 		checking.Status = OpenAIAutoResetStatusNoCredit
-		return true, s.persistState(ctx, account.ID, checking)
+		return true, s.persistState(ctx, account.ID, checking, account)
 	}
 	assessment := openAIAutoResetAssessment{
-		triggerWindow: decision.Window, resetReached: decision.ShouldPause, pauseReached: true,
+		triggerWindow: checking.TriggerWindow, resetReached: decision.ShouldPause, pauseReached: paused,
 		threshold5h: float64(decision.ThresholdPercent) / 100, threshold7d: float64(decision.ThresholdPercent) / 100,
 		utilization5h: readOpenAIQuotaUsedPercent(updates, "5h") / 100,
 		utilization7d: readOpenAIQuotaUsedPercent(updates, "7d") / 100,
 	}
-	return true, s.consumeCredit(ctx, account, usage, checking, assessment, &policy)
+	if checking.TriggerWindow == openAIQuotaExpiryResetTrigger {
+		assessment.resetReached = forceReset
+	}
+	return true, s.consumeCredit(ctx, account, usage, checking, assessment, &policy, account)
 }
 
 // validateGlobalOpenAIQuotaUsage 拒绝缺少用量或包含无效百分比的快照。
@@ -233,16 +279,31 @@ func hasPendingOpenAIAutoResetAttempt(state *OpenAIAutoResetCreditState) bool {
 // globalResetCreditEligible 按全局策略检查卡片是否有效及是否满足临期条件。
 func globalResetCreditEligible(policy OpenAIQuotaAutomationSettings, candidate openAIAutoResetCreditCandidate, now time.Time) bool {
 	expires, err := time.Parse(time.RFC3339, candidate.ExpiresAt)
-	return err == nil && expires.After(now) && (policy.ThresholdResetEnabled ||
+	return err == nil && expires.After(now) && (policy.ThresholdResetEnabled || forceExpiryResetCreditEligible(policy, candidate, now) ||
 		(policy.ExpiryResetEnabled && !expires.After(now.Add(time.Duration(policy.ExpiryDays)*24*time.Hour))))
+}
+
+// forceExpiryResetCreditEligible 检查卡片是否处于配置的到期前分钟范围内。
+func forceExpiryResetCreditEligible(policy OpenAIQuotaAutomationSettings, candidate openAIAutoResetCreditCandidate, now time.Time) bool {
+	if !policy.ExpiryForceResetEnabled || policy.ExpiryForceMinutes < 1 || policy.ExpiryForceMinutes > 1440 {
+		return false
+	}
+	expires, err := time.Parse(time.RFC3339, candidate.ExpiresAt)
+	return err == nil && expires.After(now) && !expires.After(now.Add(time.Duration(policy.ExpiryForceMinutes)*time.Minute))
 }
 
 // globalResetStillEligible 防止核销前的账号、停调原因及全局策略变更被忽略。
 func (s *OpenAIQuotaAutoResetService) globalResetStillEligible(ctx context.Context, account, observed *Account, usage *OpenAIQuotaUsage, policy OpenAIQuotaAutomationSettings, candidate openAIAutoResetCreditCandidate) bool {
-	if !policy.UsesGlobalReset() || !isOpenAIQuotaThresholdPaused(account, time.Now()) ||
+	if !policy.UsesGlobalReset() || account == nil ||
 		account.TempUnschedulableReason != observed.TempUnschedulableReason ||
 		!reflect.DeepEqual(account.Credentials, observed.Credentials) || !reflect.DeepEqual(account.ProxyID, observed.ProxyID) ||
 		!globalResetCreditEligible(policy, candidate, time.Now()) {
+		return false
+	}
+	if forceExpiryResetCreditEligible(policy, candidate, time.Now()) && isOpenAIQuotaExpiryResetAccount(account, time.Now()) {
+		return true
+	}
+	if !isOpenAIQuotaThresholdPaused(account, time.Now()) {
 		return false
 	}
 	return s.evaluateConfirmedQuotaThreshold(ctx, account, usage, time.Now()).ShouldPause &&
@@ -257,7 +318,7 @@ func (s *OpenAIQuotaAutoResetService) evaluateConfirmedQuotaThreshold(ctx contex
 }
 
 // finishGlobalQuotaReset 刷新核销后的真实额度，只解除原先匹配的额度停调。
-func (s *OpenAIQuotaAutoResetService) finishGlobalQuotaReset(ctx context.Context, observed *Account) OpenAIQuotaResetPostProcessResult {
+func (s *OpenAIQuotaAutoResetService) finishGlobalQuotaReset(ctx context.Context, observed *Account, updateActive bool) OpenAIQuotaResetPostProcessResult {
 	result := OpenAIQuotaResetPostProcessResult{}
 	account, err := s.accountRepo.GetByID(ctx, observed.ID)
 	if err != nil || account == nil {
@@ -276,6 +337,18 @@ func (s *OpenAIQuotaAutoResetService) finishGlobalQuotaReset(ctx context.Context
 	}
 	result.CacheRefreshed = true
 	if !isOpenAIQuotaThresholdPaused(account, time.Now()) || account.TempUnschedulableReason != observed.TempUnschedulableReason {
+		if updateActive && isOpenAIQuotaExpiryResetAccount(account, time.Now()) && account.TempUnschedulableReason == observed.TempUnschedulableReason {
+			repo, ok := s.accountRepo.(openAIQuotaAutomationRepository)
+			if !ok {
+				result.WarningCode = OpenAIQuotaResetWarningCacheRefreshFailed
+				return result
+			}
+			changed, err := repo.UpdateOpenAIQuotaAutomationSnapshot(ctx, account, buildGlobalOpenAIQuotaUpdates(usage, time.Now()), false)
+			if err != nil || !changed {
+				result.WarningCode = OpenAIQuotaResetWarningCacheRefreshFailed
+				return result
+			}
+		}
 		// 新出现的故障或人工操作由其自己的流程处理。
 		result.AccountStateRecovered = true
 		return result

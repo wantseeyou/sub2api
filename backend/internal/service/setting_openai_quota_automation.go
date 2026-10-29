@@ -15,26 +15,32 @@ const SettingKeyOpenAIQuotaAutomation = "openai_quota_automation"
 
 // OpenAIQuotaAutomationSettings 定义 OpenAI OAuth 账号的全局额度自动化规则。
 type OpenAIQuotaAutomationSettings struct {
-	AutoRecoverEnabled    bool `json:"auto_recover_enabled"`    // 上游停调窗口用量回落或七日归零后自动解除额度停调。
-	ExpiryResetEnabled    bool `json:"expiry_reset_enabled"`    // 达到停调阈值后优先使用临期卡。
-	ExpiryDays            int  `json:"expiry_days"`             // 重置卡到期前多少天视为临期。
-	ThresholdResetEnabled bool `json:"threshold_reset_enabled"` // 达到停调阈值后自动使用有效重置卡。
+	AutoRecoverEnabled      bool `json:"auto_recover_enabled"`           // 上游停调窗口用量回落或七日归零后自动解除额度停调。
+	ExpiryResetEnabled      bool `json:"expiry_reset_enabled"`           // 达到停调阈值后优先使用临期卡。
+	ExpiryDays              int  `json:"expiry_days"`                    // 重置卡到期前多少天视为临期。
+	ExpiryForceResetEnabled bool `json:"expiry_force_reset_enabled"`     // 临近过期时不受额度阈值限制，自动使用重置卡。
+	ExpiryForceMinutes      int  `json:"expiry_force_minutes,omitempty"` // 重置卡过期前多少分钟无条件使用。
+	ThresholdResetEnabled   bool `json:"threshold_reset_enabled"`        // 达到停调阈值后自动使用有效重置卡。
 }
 
 // UsesGlobalReset 判断全局用卡策略是否接管账号级用卡配置。
 func (s OpenAIQuotaAutomationSettings) UsesGlobalReset() bool {
-	return s.ExpiryResetEnabled || s.ThresholdResetEnabled
+	return s.ExpiryResetEnabled || s.ThresholdResetEnabled || s.ExpiryForceResetEnabled
 }
 
 // defaultOpenAIQuotaAutomationSettings 保持新功能默认关闭、临期天数默认为一天。
 func defaultOpenAIQuotaAutomationSettings() OpenAIQuotaAutomationSettings {
-	return OpenAIQuotaAutomationSettings{ExpiryDays: 1}
+	return OpenAIQuotaAutomationSettings{ExpiryDays: 1, ExpiryForceMinutes: 10}
 }
 
-// validateOpenAIQuotaAutomationSettings 校验临期天数，避免无效或溢出的时间窗口。
+// validateOpenAIQuotaAutomationSettings 校验临期天数和强制用卡分钟数，避免无效或溢出的时间窗口。
 func validateOpenAIQuotaAutomationSettings(settings OpenAIQuotaAutomationSettings) error {
 	if settings.ExpiryDays < 1 || settings.ExpiryDays > 365 {
 		return infraerrors.BadRequest("OPENAI_QUOTA_AUTOMATION_INVALID", "openai_quota_automation.expiry_days must be between 1 and 365")
+	}
+	if settings.ExpiryForceMinutes < 0 || settings.ExpiryForceMinutes > 1440 ||
+		(settings.ExpiryForceResetEnabled && settings.ExpiryForceMinutes < 1) {
+		return infraerrors.BadRequest("OPENAI_QUOTA_AUTOMATION_INVALID", "openai_quota_automation.expiry_force_minutes must be between 1 and 1440 when enabled")
 	}
 	return nil
 }

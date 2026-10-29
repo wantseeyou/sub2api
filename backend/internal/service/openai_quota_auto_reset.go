@@ -305,15 +305,16 @@ func (s *OpenAIQuotaAutoResetService) evaluateAccount(ctx context.Context, accou
 	}
 	if isOpenAIQuotaThresholdPaused(account, time.Now()) {
 		s.enqueueQuotaPauseNotifications(ctx, account)
-		if global.AutoRecoverEnabled || global.UsesGlobalReset() {
-			handled, err := s.evaluateGlobalQuotaAutomation(ctx, account, global)
-			if err != nil || handled {
-				return err
-			}
-			account, err = s.accountRepo.GetByID(ctx, accountID)
-			if err != nil || account == nil {
-				return err
-			}
+	}
+	if (isOpenAIQuotaThresholdPaused(account, time.Now()) && (global.AutoRecoverEnabled || global.UsesGlobalReset())) ||
+		(global.ExpiryForceResetEnabled && isOpenAIQuotaExpiryResetAccount(account, time.Now())) {
+		handled, err := s.evaluateGlobalQuotaAutomation(ctx, account, global)
+		if err != nil || handled {
+			return err
+		}
+		account, err = s.accountRepo.GetByID(ctx, accountID)
+		if err != nil || account == nil {
+			return err
 		}
 	}
 	if global.UsesGlobalReset() {
@@ -332,6 +333,7 @@ func (s *OpenAIQuotaAutoResetService) evaluateAccount(ctx context.Context, accou
 
 	assessment := s.assessExtra(account, config, now)
 	state := openAIAutoResetStateFromExtra(account.Extra)
+	stateAccount := account
 	// 达到用卡阈值本应立即查询以便用卡；但 10 分钟内已确认无卡时，重查不会改变结论，
 	// 只会让调度热路径的通知把同一账号的上游额度接口打到十几秒一次。
 	needsQuery := openAIAutoResetSnapshotStale(account.Extra, now) ||
@@ -352,7 +354,7 @@ func (s *OpenAIQuotaAutoResetService) evaluateAccount(ctx context.Context, accou
 			} else {
 				state.Status = OpenAIAutoResetStatusNoCredit
 			}
-			return s.persistState(ctx, accountID, state)
+			return s.persistState(ctx, accountID, state, stateAccount)
 		}
 		return nil
 	}
@@ -364,19 +366,19 @@ func (s *OpenAIQuotaAutoResetService) evaluateAccount(ctx context.Context, accou
 		CheckedAt:      now.UTC().Format(time.RFC3339),
 	}
 	copyOpenAIAutoResetAttempt(checking, state)
-	if err := s.persistState(ctx, accountID, checking); err != nil {
+	if err := s.persistState(ctx, accountID, checking, stateAccount); err != nil {
 		return err
 	}
 
 	usage, err := s.quota.QueryUsage(ctx, accountID)
 	if err != nil || usage == nil {
-		return s.failState(ctx, accountID, checking, "RESET_CREDIT_QUERY_FAILED", err)
+		return s.failState(ctx, accountID, checking, "RESET_CREDIT_QUERY_FAILED", err, stateAccount)
 	}
 	if err := s.persistFreshUsage(ctx, accountID, usage, now); err != nil {
-		return s.failState(ctx, accountID, checking, "USAGE_SNAPSHOT_WRITE_FAILED", err)
+		return s.failState(ctx, accountID, checking, "USAGE_SNAPSHOT_WRITE_FAILED", err, stateAccount)
 	}
 	if usage.RateLimitResetCredits == nil {
-		return s.failState(ctx, accountID, checking, "RESET_CREDIT_DETAILS_UNAVAILABLE", nil)
+		return s.failState(ctx, accountID, checking, "RESET_CREDIT_DETAILS_UNAVAILABLE", nil, stateAccount)
 	}
 
 	// 查询期间管理员可能关闭开关；消费前重新读取账号，确保尚未发出的任务可取消。
@@ -400,7 +402,7 @@ func (s *OpenAIQuotaAutoResetService) evaluateAccount(ctx context.Context, accou
 			TriggerWindow:  assessment.triggerWindow,
 			AvailableCount: available,
 			CheckedAt:      now.UTC().Format(time.RFC3339),
-		})
+		}, stateAccount)
 	}
 	if available <= 0 {
 		return s.persistState(ctx, accountID, &OpenAIAutoResetCreditState{
@@ -410,14 +412,14 @@ func (s *OpenAIQuotaAutoResetService) evaluateAccount(ctx context.Context, accou
 			CheckedAt:      now.UTC().Format(time.RFC3339),
 			LastResultAt:   now.UTC().Format(time.RFC3339),
 			ErrorCode:      "NO_RESET_CREDIT",
-		})
+		}, stateAccount)
 	}
 
-	return s.consumeCredit(ctx, account, usage, checking, assessment, nil)
+	return s.consumeCredit(ctx, account, usage, checking, assessment, nil, stateAccount)
 }
 
 // consumeCredit 复用同一核销流程，并在消费前复核账号状态和当前全局策略。
-func (s *OpenAIQuotaAutoResetService) consumeCredit(ctx context.Context, account *Account, usage *OpenAIQuotaUsage, checking *OpenAIAutoResetCreditState, assessment openAIAutoResetAssessment, global *OpenAIQuotaAutomationSettings) error {
+func (s *OpenAIQuotaAutoResetService) consumeCredit(ctx context.Context, account *Account, usage *OpenAIQuotaUsage, checking *OpenAIAutoResetCreditState, assessment openAIAutoResetAssessment, global *OpenAIQuotaAutomationSettings, stateAccount *Account) error {
 	accountID := account.ID
 	observedAccount := account
 	available := usage.RateLimitResetCredits.AvailableCount
@@ -425,14 +427,21 @@ func (s *OpenAIQuotaAutoResetService) consumeCredit(ctx context.Context, account
 	now := time.Now()
 	var err error
 	cycleSeed := openAIAutoResetCycleSeed(usage)
+	selectionState := state
 	if global != nil {
 		cycleSeed = "pause:" + account.TempUnschedulableReason
+		if assessment.triggerWindow == openAIQuotaExpiryResetTrigger {
+			cycleSeed = "expiry"
+			if !hasPendingOpenAIAutoResetAttempt(state) {
+				selectionState = nil
+			}
+		}
 	}
 	cycleHash := shortOpenAIAutoResetHash(cycleSeed)
 	if global != nil && hasPendingOpenAIAutoResetAttempt(state) {
 		cycleHash = state.AttemptCycleHash
 	}
-	candidate, selectErr := selectOpenAIAutoResetCandidate(usage.autoResetCandidates, available, state, cycleHash)
+	candidate, selectErr := selectOpenAIAutoResetCandidate(usage.autoResetCandidates, available, selectionState, cycleHash)
 	replayOnly := global != nil && state.AttemptCycleHash == cycleHash && state.AttemptCreditHash != "" &&
 		(selectErr != nil || !assessment.resetReached)
 	if selectErr != nil && !replayOnly {
@@ -440,7 +449,7 @@ func (s *OpenAIQuotaAutoResetService) consumeCredit(ctx context.Context, account
 		failed.AvailableCount = available
 		failed.TriggerWindow = assessment.triggerWindow
 		failed.AttemptCycleHash = cycleHash
-		return s.failState(ctx, accountID, failed, infraerrors.Reason(selectErr), selectErr)
+		return s.failState(ctx, accountID, failed, infraerrors.Reason(selectErr), selectErr, stateAccount)
 	}
 	creditHash := shortOpenAIAutoResetHash(candidate.ID)
 	if replayOnly {
@@ -449,7 +458,7 @@ func (s *OpenAIQuotaAutoResetService) consumeCredit(ctx context.Context, account
 	if global != nil && !replayOnly && !globalResetCreditEligible(*global, candidate, now) {
 		checking.Status = OpenAIAutoResetStatusAvailable
 		checking.AvailableCount = available
-		return s.persistState(ctx, accountID, checking)
+		return s.persistState(ctx, accountID, checking, stateAccount)
 	}
 	stableKey := fmt.Sprintf("oarc:%d:%s:%s", accountID, creditHash, cycleHash)
 	redeemRequestID := uuid.NewSHA1(uuid.NameSpaceURL, []byte(stableKey)).String()
@@ -476,7 +485,7 @@ func (s *OpenAIQuotaAutoResetService) consumeCredit(ctx context.Context, account
 	} else if !replayOnly && !s.globalResetStillEligible(ctx, account, observedAccount, usage, currentPolicy, candidate) {
 		return nil
 	}
-	if err := s.persistState(ctx, accountID, resetting); err != nil {
+	if err := s.persistState(ctx, accountID, resetting, stateAccount); err != nil {
 		return err
 	}
 	result, err := s.idempotency.Execute(ctx, IdempotencyExecuteOptions{
@@ -501,7 +510,11 @@ func (s *OpenAIQuotaAutoResetService) consumeCredit(ctx context.Context, account
 			if readErr != nil {
 				return nil, readErr
 			}
-			if !s.globalResetStillEligible(execCtx, fresh, observedAccount, usage, currentPolicy, candidate) {
+			latestPolicy, policyErr := s.settings.refreshOpenAIQuotaAutomationSettings(execCtx)
+			if policyErr != nil {
+				return nil, policyErr
+			}
+			if !s.globalResetStillEligible(execCtx, fresh, observedAccount, usage, latestPolicy, candidate) {
 				return nil, infraerrors.Conflict("OPENAI_QUOTA_AUTOMATION_CHANGED", "account quota pause changed before reset")
 			}
 		}
@@ -523,7 +536,7 @@ func (s *OpenAIQuotaAutoResetService) consumeCredit(ctx context.Context, account
 			return nil
 		}
 		s.recordAudit(accountID, assessment, available, "failed", 0, infraerrors.Reason(err))
-		return s.failState(ctx, accountID, resetting, infraerrors.Reason(err), err)
+		return s.failState(ctx, accountID, resetting, infraerrors.Reason(err), err, stateAccount)
 	}
 
 	consumeResult := decodeOpenAIAutoResetConsumeResult(result.Data)
@@ -540,12 +553,12 @@ func (s *OpenAIQuotaAutoResetService) consumeCredit(ctx context.Context, account
 			AttemptCreditHash: creditHash,
 		}
 		s.recordAudit(accountID, assessment, available, "no_credit", 0, noCredit.ErrorCode)
-		return s.persistState(ctx, accountID, noCredit)
+		return s.persistState(ctx, accountID, noCredit, stateAccount)
 	}
 	postCtx, cancelPost := context.WithTimeout(context.WithoutCancel(ctx), 8*time.Second)
 	var post OpenAIQuotaResetPostProcessResult
 	if global != nil {
-		post = s.finishGlobalQuotaReset(postCtx, observedAccount)
+		post = s.finishGlobalQuotaReset(postCtx, observedAccount, assessment.triggerWindow == openAIQuotaExpiryResetTrigger)
 	} else {
 		post = RunOpenAIQuotaResetPostProcess(postCtx, accountID, s.quota, s.recoverer, s.accountRepo.GetByID)
 	}
@@ -563,7 +576,7 @@ func (s *OpenAIQuotaAutoResetService) consumeCredit(ctx context.Context, account
 			code = OpenAIQuotaResetWarningAccountRecoveryFailed
 		}
 		s.recordAudit(accountID, assessment, available, "recovery_failed", consumeResult.WindowsReset, code)
-		return s.failState(ctx, accountID, resetting, code, nil)
+		return s.failState(ctx, accountID, resetting, code, nil, stateAccount)
 	}
 
 	successAt := time.Now().UTC().Format(time.RFC3339)
@@ -579,7 +592,7 @@ func (s *OpenAIQuotaAutoResetService) consumeCredit(ctx context.Context, account
 	if post.Quota != nil && post.Quota.RateLimitResetCredits != nil {
 		success.AvailableCount = post.Quota.RateLimitResetCredits.AvailableCount
 	}
-	if err := s.persistState(ctx, accountID, success); err != nil {
+	if err := s.persistState(ctx, accountID, success, stateAccount); err != nil {
 		return err
 	}
 	s.recordAudit(accountID, assessment, available, "success", consumeResult.WindowsReset, "")
@@ -854,14 +867,33 @@ func copyOpenAIAutoResetAttempt(target, source *OpenAIAutoResetCreditState) {
 	target.AttemptCreditHash = source.AttemptCreditHash
 }
 
-func (s *OpenAIQuotaAutoResetService) persistState(ctx context.Context, accountID int64, state *OpenAIAutoResetCreditState) error {
+// persistState 通过条件更新保护核销状态，拒绝迟到任务覆盖较新的卡片尝试。
+func (s *OpenAIQuotaAutoResetService) persistState(ctx context.Context, accountID int64, state *OpenAIAutoResetCreditState, observed *Account) error {
 	if state == nil {
+		return nil
+	}
+	if repo, ok := s.accountRepo.(interface {
+		CompareAndSwapOpenAIAutoResetState(context.Context, int64, any, *OpenAIAutoResetCreditState) (bool, error)
+	}); ok {
+		changed, err := repo.CompareAndSwapOpenAIAutoResetState(ctx, accountID, observed.Extra[OpenAIAutoResetCreditStateExtraKey], state)
+		if err != nil {
+			return err
+		}
+		if !changed {
+			return infraerrors.Conflict("OPENAI_AUTO_RESET_STATE_CHANGED", "automatic reset state changed before update")
+		}
+		if observed.Extra == nil {
+			observed.Extra = make(map[string]any)
+		}
+		next := *state
+		observed.Extra[OpenAIAutoResetCreditStateExtraKey] = &next
 		return nil
 	}
 	return s.accountRepo.UpdateExtra(ctx, accountID, map[string]any{OpenAIAutoResetCreditStateExtraKey: state})
 }
 
-func (s *OpenAIQuotaAutoResetService) failState(ctx context.Context, accountID int64, state *OpenAIAutoResetCreditState, code string, cause error) error {
+// failState 保存本次失败结果，并保留未确认卡片的重放标识。
+func (s *OpenAIQuotaAutoResetService) failState(ctx context.Context, accountID int64, state *OpenAIAutoResetCreditState, code string, cause error, observed *Account) error {
 	if state == nil {
 		state = &OpenAIAutoResetCreditState{}
 	}
@@ -871,7 +903,7 @@ func (s *OpenAIQuotaAutoResetService) failState(ctx context.Context, accountID i
 	state.Status = OpenAIAutoResetStatusFailed
 	state.ErrorCode = code
 	state.LastResultAt = time.Now().UTC().Format(time.RFC3339)
-	if err := s.persistState(ctx, accountID, state); err != nil {
+	if err := s.persistState(ctx, accountID, state, observed); err != nil {
 		return err
 	}
 	slog.Warn("openai_auto_reset_credit_failed",

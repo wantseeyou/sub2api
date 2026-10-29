@@ -23,6 +23,8 @@ export interface OpenAIQuotaAutomationSettings {
   auto_recover_enabled: boolean;
   expiry_reset_enabled: boolean;
   expiry_days: number;
+  expiry_force_reset_enabled: boolean; // 是否在卡片临近过期时无视额度阈值自动使用。
+  expiry_force_minutes: number; // 卡片到期前多少分钟触发保底使用。
   threshold_reset_enabled: boolean;
 }
 
@@ -32,6 +34,8 @@ export function defaultOpenAIQuotaAutomationSettings(): OpenAIQuotaAutomationSet
     auto_recover_enabled: false,
     expiry_reset_enabled: false,
     expiry_days: 1,
+    expiry_force_reset_enabled: false,
+    expiry_force_minutes: 10,
     threshold_reset_enabled: false,
   };
 }

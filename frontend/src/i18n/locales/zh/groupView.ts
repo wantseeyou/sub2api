@@ -31,6 +31,16 @@ export default {
   remaining: '剩余',
   resetsAt: '重置时间',
   updatedAt: '快照时间',
+  windowRequests: '请求',
+  creditExpires: '{time}后到期',
+  schedulingEnabled: '调度开关：开启',
+  schedulingDisabled: '调度开关：关闭',
+  schedulingUntil: '限制截至',
+  schedulingStates: {
+    available: '可调度', disabled: '调度已关闭', inactive: '账号停用', error: '账号异常',
+    expired: '账号已过期', overloaded: '529 过载', rate_limited: '429 限流',
+    quota_paused: '额度停调', temp_unschedulable: '临时不可调度', quota_exceeded: '配额超限'
+  },
   noAccess: '当前没有有效的分组查看授权。',
   loadFailed: '读取失败，请重试。',
   saveFailed: '保存授权失败，请重试。',
