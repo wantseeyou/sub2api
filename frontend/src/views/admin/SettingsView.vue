@@ -5054,39 +5054,6 @@
                 </div>
               </div>
 
-              <div class="space-y-4 border-t border-gray-100 pt-5 dark:border-dark-700" data-testid="openai-quota-automation-settings">
-                <div>
-                  <h3 class="font-medium text-gray-900 dark:text-white">{{ t("admin.settings.openaiQuotaAutomation.title") }}</h3>
-                  <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t("admin.settings.openaiQuotaAutomation.description") }}</p>
-                </div>
-                <div class="flex items-start justify-between gap-4">
-                  <div>
-                    <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.settings.openaiQuotaAutomation.recover") }}</label>
-                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.settings.openaiQuotaAutomation.recoverHint") }}</p>
-                  </div>
-                  <Toggle v-model="form.openai_quota_automation.auto_recover_enabled" data-testid="openai-quota-auto-recover" />
-                </div>
-                <div class="flex items-start justify-between gap-4">
-                  <div>
-                    <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.settings.openaiQuotaAutomation.expiry") }}</label>
-                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.settings.openaiQuotaAutomation.expiryHint") }}</p>
-                  </div>
-                  <Toggle v-model="form.openai_quota_automation.expiry_reset_enabled" data-testid="openai-quota-expiry-reset" />
-                </div>
-                <div v-if="form.openai_quota_automation.expiry_reset_enabled" class="max-w-xs">
-                  <label for="openai-quota-expiry-days" class="input-label">{{ t("admin.settings.openaiQuotaAutomation.expiryDays") }}</label>
-                  <input id="openai-quota-expiry-days" v-model.number="form.openai_quota_automation.expiry_days" type="number" min="1" max="365" step="1" class="input" />
-                </div>
-                <div class="flex items-start justify-between gap-4">
-                  <div>
-                    <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.settings.openaiQuotaAutomation.threshold") }}</label>
-                    <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.settings.openaiQuotaAutomation.thresholdHint") }}</p>
-                  </div>
-                  <Toggle v-model="form.openai_quota_automation.threshold_reset_enabled" data-testid="openai-quota-threshold-reset" />
-                </div>
-                <p class="text-xs text-gray-500 dark:text-gray-400">{{ t("admin.settings.openaiQuotaAutomation.compatibilityHint") }}</p>
-              </div>
-
               <div
                 v-if="!form.openai_advanced_scheduler_enabled"
                 class="flex items-center justify-between border-t border-gray-100 pt-5 dark:border-dark-700"
@@ -6375,6 +6342,44 @@
         </div>
         </div>
         <!-- /Tab: Gateway — Claude Code, Scheduling -->
+
+        <!-- Tab: Codex -->
+        <div v-show="activeTab === 'codex'" class="space-y-6">
+          <div class="card" data-testid="openai-quota-automation-settings">
+            <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
+              <h2 class="text-lg font-semibold text-gray-900 dark:text-white">{{ t("admin.settings.openaiQuotaAutomation.title") }}</h2>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">{{ t("admin.settings.openaiQuotaAutomation.description") }}</p>
+            </div>
+            <div class="space-y-4 p-6">
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.settings.openaiQuotaAutomation.recover") }}</label>
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.settings.openaiQuotaAutomation.recoverHint") }}</p>
+                </div>
+                <Toggle v-model="form.openai_quota_automation.auto_recover_enabled" data-testid="openai-quota-auto-recover" />
+              </div>
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.settings.openaiQuotaAutomation.expiry") }}</label>
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.settings.openaiQuotaAutomation.expiryHint") }}</p>
+                </div>
+                <Toggle v-model="form.openai_quota_automation.expiry_reset_enabled" data-testid="openai-quota-expiry-reset" />
+              </div>
+              <div v-if="form.openai_quota_automation.expiry_reset_enabled" class="max-w-xs">
+                <label for="openai-quota-expiry-days" class="input-label">{{ t("admin.settings.openaiQuotaAutomation.expiryDays") }}</label>
+                <input id="openai-quota-expiry-days" v-model.number="form.openai_quota_automation.expiry_days" type="number" min="1" max="365" step="1" class="input" />
+              </div>
+              <div class="flex items-start justify-between gap-4">
+                <div>
+                  <label class="text-sm font-medium text-gray-700 dark:text-gray-300">{{ t("admin.settings.openaiQuotaAutomation.threshold") }}</label>
+                  <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{{ t("admin.settings.openaiQuotaAutomation.thresholdHint") }}</p>
+                </div>
+                <Toggle v-model="form.openai_quota_automation.threshold_reset_enabled" data-testid="openai-quota-threshold-reset" />
+              </div>
+              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t("admin.settings.openaiQuotaAutomation.compatibilityHint") }}</p>
+            </div>
+          </div>
+        </div>
 
         <!-- Tab: General -->
         <div v-show="activeTab === 'general'" class="space-y-6">
@@ -9149,6 +9154,7 @@ type SettingsTab =
   | "security"
   | "users"
   | "gateway"
+  | "codex"
   | "payment"
   | "email"
   | "push"
@@ -9163,6 +9169,7 @@ const settingsTabs = [
   { key: "security" as SettingsTab, icon: "shield" as const },
   { key: "users" as SettingsTab, icon: "user" as const },
   { key: "gateway" as SettingsTab, icon: "server" as const },
+  { key: "codex" as SettingsTab, icon: "terminal" as const },
   { key: "payment" as SettingsTab, icon: "creditCard" as const },
   { key: "email" as SettingsTab, icon: "mail" as const },
   { key: "push" as SettingsTab, icon: "bell" as const },

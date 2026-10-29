@@ -92,6 +92,38 @@ func (s *XtuisPushService) NotifyQuotaPause(account *Account) {
 	s.enqueue(SettingKeyXtuisPushAccountQuotaEnabled, eventKey, func(context.Context) (string, string, error) { return title, body, nil })
 }
 
+// NotifyAutoResetCreditUsed 按核销周期和卡片指纹去重，推送实际用卡结果及本地恢复情况。
+func (s *XtuisPushService) NotifyAutoResetCreditUsed(account *Account, state *OpenAIAutoResetCreditState, expiresAt string, windowsReset int, post OpenAIQuotaResetPostProcessResult) {
+	if s == nil || account == nil || state == nil {
+		return
+	}
+	remaining := max(0, state.AvailableCount-1)
+	remainingLabel := "预计剩余可用卡"
+	if post.Quota != nil && post.Quota.RateLimitResetCredits != nil {
+		remaining = post.Quota.RateLimitResetCredits.AvailableCount
+		remainingLabel = "剩余可用卡"
+	}
+	lines := xtuisPushAccountLines(account)
+	lines = append(lines, "", "使用结果：已自动使用 1 张重置卡")
+	if window := map[string]string{"5h": "5 小时", "7d": "7 日", "5h+7d": "5 小时、7 日"}[state.TriggerWindow]; window != "" {
+		lines = append(lines, "触发额度："+window+"额度")
+	}
+	if expires, err := time.Parse(time.RFC3339, expiresAt); err == nil {
+		lines = append(lines, "卡片原到期："+xtuisPushTime(expires))
+	}
+	if windowsReset > 0 {
+		lines = append(lines, fmt.Sprintf("重置窗口：%d 个", windowsReset))
+	}
+	lines = append(lines, fmt.Sprintf("%s：%d 张", remainingLabel, remaining))
+	if !post.AccountStateRecovered || post.WarningCode != "" {
+		lines = append(lines, "后续处理：本地恢复未完成，请检查账号状态和额度")
+	}
+	lines = append(lines, "", "确认时间："+xtuisPushTime(time.Now()))
+	title, body := xtuisPushTitle("自动用卡", account.Name), strings.Join(lines, "\n")
+	eventKey := fmt.Sprintf("reset-credit:%d:%s:%s", account.ID, state.AttemptCycleHash, state.AttemptCreditHash)
+	s.enqueue(SettingKeyXtuisPushAccountQuotaEnabled, eventKey, func(context.Context) (string, string, error) { return title, body, nil })
+}
+
 // NotifyAccountQuota 在金额限额跨过告警阈值时推送，不将提前告警误报为停调。
 func (s *XtuisPushService) NotifyAccountQuota(account *Account, dim quotaDim, used, threshold float64) {
 	if s == nil || account == nil {

@@ -550,6 +550,13 @@ func (s *OpenAIQuotaAutoResetService) consumeCredit(ctx context.Context, account
 		post = RunOpenAIQuotaResetPostProcess(postCtx, accountID, s.quota, s.recoverer, s.accountRepo.GetByID)
 	}
 	cancelPost()
+	if s.quotaNotifier != nil {
+		if consumeResult.Code != "" && consumeResult.Code != "***" {
+			s.quotaNotifier.xtuisPush.NotifyAutoResetCreditUsed(account, resetting, candidate.ExpiresAt, consumeResult.WindowsReset, post)
+		} else {
+			slog.Warn("openai_auto_reset_notification_result_unconfirmed", "account_id", accountID)
+		}
+	}
 	if !post.AccountStateRecovered || post.WarningCode != "" {
 		code := post.WarningCode
 		if code == "" {
@@ -589,8 +596,8 @@ func (s *OpenAIQuotaAutoResetService) consumeCredit(ctx context.Context, account
 }
 
 type openAIAutoResetConsumeResult struct {
-	Code         string `json:"code"`
-	WindowsReset int    `json:"windows_reset"`
+	Code         string `json:"result_code"`   // 核销业务状态，避免被通用 code 凭据脱敏规则覆盖。
+	WindowsReset int    `json:"windows_reset"` // 上游确认重置的额度窗口数量。
 }
 
 func decodeOpenAIAutoResetConsumeResult(value any) openAIAutoResetConsumeResult {
@@ -598,9 +605,15 @@ func decodeOpenAIAutoResetConsumeResult(value any) openAIAutoResetConsumeResult 
 		return typed
 	}
 	raw, _ := json.Marshal(value)
-	var decoded openAIAutoResetConsumeResult
+	var decoded struct {
+		openAIAutoResetConsumeResult        // 当前格式的脱敏核销结果。
+		LegacyCode                   string `json:"code"` // 兼容旧幂等记录的业务状态字段。
+	}
 	_ = json.Unmarshal(raw, &decoded)
-	return decoded
+	if decoded.Code == "" {
+		decoded.Code = decoded.LegacyCode
+	}
+	return decoded.openAIAutoResetConsumeResult
 }
 
 func (s *OpenAIQuotaAutoResetService) assessExtra(account *Account, config OpenAIAutoResetCreditConfig, now time.Time) openAIAutoResetAssessment {
