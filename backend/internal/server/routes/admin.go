@@ -302,6 +302,10 @@ func registerDashboardRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 func registerUserManagementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	users := admin.Group("/users")
 	{
+		if h.GroupView != nil {
+			users.GET("/:id/group-view-grants", h.GroupView.GetGrants)
+			users.PUT("/:id/group-view-grants", h.GroupView.SetGrants)
+		}
 		users.GET("", h.Admin.User.List)
 		users.GET("/:id", h.Admin.User.GetByID)
 		users.POST("/:id/auth-identities", h.Admin.User.BindAuthIdentity)

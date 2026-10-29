@@ -230,6 +230,16 @@ const routes: RouteRecordRaw[] = [
     }
   },
   {
+    path: '/group-view',
+    name: 'GroupView',
+    component: () => import('@/views/user/GroupView.vue'),
+    meta: {
+      requiresAuth: true,
+      title: 'Group View',
+      titleKey: 'groupView.title'
+    }
+  },
+  {
     path: '/usage',
     name: 'Usage',
     component: () => import('@/views/user/UsageView.vue'),
