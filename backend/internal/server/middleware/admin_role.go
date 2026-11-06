@@ -16,6 +16,11 @@ import (
 // authorizeRoleRequest 按显式接口目录和请求字段检查网页登录角色权限。
 func authorizeRoleRequest(c *gin.Context, users *service.UserService) bool {
 	role := adminaccess.RoleFromContext(c.Request.Context())
+	// 本人的合规确认是后台访问前置条件，不依赖可分配的业务权限。
+	if role != nil && ((c.Request.Method == "GET" && c.FullPath() == "/api/v1/admin/compliance") ||
+		(c.Request.Method == "POST" && c.FullPath() == "/api/v1/admin/compliance/accept")) {
+		return true
+	}
 	allowed := false
 	for _, permission := range adminaccess.RoleRoutePermissions(c.Request.Method, c.FullPath()) {
 		if role.Allows(permission) {

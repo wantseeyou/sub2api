@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { RouterView, useRouter, useRoute } from 'vue-router'
-import { computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { computed, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import Toast from '@/components/common/Toast.vue'
 import NavigationProgress from '@/components/common/NavigationProgress.vue'
 import AdminComplianceDialog from '@/components/admin/AdminComplianceDialog.vue'
@@ -11,6 +11,7 @@ import { getSetupStatus } from '@/api/setup'
 import { updateFavicon } from '@/utils/branding'
 import { FeatureFlags, isFeatureFlagEnabled } from '@/utils/featureFlags'
 import { resolveSiteBillingMode } from '@/utils/siteBillingMode'
+import { canAccessAdminPath, getAdminHomePath } from '@/utils/adminAccess'
 
 const router = useRouter()
 const route = useRoute()
@@ -20,6 +21,7 @@ const subscriptionStore = useSubscriptionStore()
 const announcementStore = useAnnouncementStore()
 const adminComplianceStore = useAdminComplianceStore()
 const adminSettingsStore = useAdminSettingsStore()
+const compliancePageVersion = ref(0)
 
 function updateDocumentTitle() {
   const customMenuItems = [
@@ -65,10 +67,34 @@ function onVisibilityChange() {
   }
 }
 
+// 仅为当前仍有后台资格的登录用户处理合规拦截。
 function onAdminComplianceRequired(event: Event) {
+  if (!authStore.isAuthenticated || !authStore.canAccessAdmin) return
   const detail = (event as CustomEvent<Record<string, string>>).detail || {}
   adminComplianceStore.requireAcknowledgement(detail)
 }
+
+watch(
+  () => authStore.isAuthenticated && authStore.canAccessAdmin ? authStore.user?.id : null,
+  (userId) => {
+    adminComplianceStore.reset()
+    if (userId != null) {
+      adminComplianceStore.fetchStatus().catch((error) => {
+        console.error('Failed to fetch admin compliance status:', error)
+      })
+    }
+  },
+  { immediate: true }
+)
+
+// 登录信息刷新或角色权限收紧后，离开已无权访问的后台页面。
+watch(
+  () => authStore.isAuthenticated && route.meta.requiresAdmin === true && !canAccessAdminPath(authStore.user, route.path),
+  (denied) => {
+    if (denied) router.replace(getAdminHomePath(authStore.user))
+  },
+  { immediate: true }
+)
 
 // 订阅功能开关（opt-out）。关闭后不再预加载/轮询订阅接口；开关在登录后才到达时补启动，反向则清空。
 const subscriptionFeatureEnabled = computed(() => isFeatureFlagEnabled(FeatureFlags.subscription))
@@ -93,12 +119,6 @@ watch(
   () => authStore.isAuthenticated,
   (isAuthenticated, oldValue) => {
     if (isAuthenticated) {
-      if (authStore.isAdmin) {
-        adminComplianceStore.fetchStatus().catch((error) => {
-          console.error('Failed to fetch admin compliance status:', error)
-        })
-      }
-
       // User logged in: preload subscriptions and start polling (skipped when the
       // subscription feature is switched off; see the flag watcher below)
       if (subscriptionFeatureEnabled.value) {
@@ -120,7 +140,6 @@ watch(
       // User logged out: clear data and stop polling
       subscriptionStore.clear()
       announcementStore.reset()
-      adminComplianceStore.reset()
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
   },
@@ -163,8 +182,8 @@ onMounted(async () => {
 
 <template>
   <NavigationProgress />
-  <RouterView />
+  <RouterView :key="compliancePageVersion" />
   <Toast />
   <AnnouncementPopup />
-  <AdminComplianceDialog />
+  <AdminComplianceDialog @accepted="compliancePageVersion++" />
 </template>

@@ -109,6 +109,7 @@ import { getLocale } from '@/i18n'
 import zhDocument from '../../../../docs/legal/admin-compliance.zh.md?raw'
 import enDocument from '../../../../docs/legal/admin-compliance.en.md?raw'
 
+const emit = defineEmits<{ accepted: [] }>()
 const { t } = useI18n()
 const complianceStore = useAdminComplianceStore()
 const authStore = useAuthStore()
@@ -121,7 +122,7 @@ marked.setOptions({
   gfm: true,
 })
 
-const visible = computed(() => authStore.isAuthenticated && authStore.isAdmin && complianceStore.shouldShow)
+const visible = computed(() => authStore.isAuthenticated && authStore.canAccessAdmin && complianceStore.shouldShow)
 const expectedPhrase = computed(() => complianceStore.expectedPhrase)
 const canSubmit = computed(() => typedPhrase.value.trim() === expectedPhrase.value)
 const currentDocument = computed(() => getLocale() === 'zh' ? zhDocument : enDocument)
@@ -158,6 +159,7 @@ function noop(): void {
   // 强制确认弹窗不允许通过关闭按钮绕过。
 }
 
+// 提交本人合规确认，成功后通知页面重新加载被拦截的数据。
 async function submit(): Promise<void> {
   attemptedSubmit.value = true
   if (!canSubmit.value) {
@@ -170,6 +172,7 @@ async function submit(): Promise<void> {
       appStore.showSuccess(t('adminCompliance.accepted'))
       typedPhrase.value = ''
       attemptedSubmit.value = false
+      emit('accepted')
     }
   } catch (error) {
     const message = (error as { message?: string })?.message || t('adminCompliance.acceptFailed')
