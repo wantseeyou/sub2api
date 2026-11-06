@@ -26,11 +26,7 @@
             <div v-if="visibleFilters.has('role')" class="w-full sm:w-32">
               <Select
                 v-model="filters.role"
-                :options="[
-                  { value: '', label: t('admin.users.allRoles') },
-                  { value: 'admin', label: t('admin.users.admin') },
-                  { value: 'user', label: t('admin.users.user') }
-                ]"
+                :options="roleFilterOptions"
                 @change="applyFilter"
               />
             </div>
@@ -232,7 +228,7 @@
                 </div>
               </div>
               <!-- Attributes Config Button -->
-              <button
+              <button v-permission="'user_attributes.read'"
                 @click="showAttributesModal = true"
                 class="btn btn-secondary px-2 md:px-3"
                 :title="t('admin.users.attributes.configButton')"
@@ -242,7 +238,7 @@
               </button>
             </div>
 
-            <button
+            <button v-permission="'users.execute'"
               v-if="selectedCount > 0"
               class="btn btn-secondary flex-1 md:flex-initial"
               data-test="bulk-edit-limits"
@@ -252,7 +248,7 @@
               {{ t('admin.users.bulkLimits.action', { count: selectedCount }) }}
             </button>
 
-            <button
+            <button v-permission="'users.delete'"
               v-if="selectedCount > 0"
               class="btn btn-danger flex-1 md:flex-initial"
               data-test="bulk-delete-users"
@@ -264,7 +260,7 @@
             </button>
 
             <!-- Create User Button (full width on mobile, auto width on desktop) -->
-            <button @click="showCreateModal = true" class="btn btn-primary flex-1 md:flex-initial">
+            <button v-permission="'users.create'" @click="showCreateModal = true" class="btn btn-primary flex-1 md:flex-initial">
               <Icon name="plus" size="md" class="mr-2" />
               {{ t('admin.users.createUser') }}
             </button>
@@ -336,9 +332,9 @@
             </div>
           </template>
 
-          <template #cell-role="{ value }">
+          <template #cell-role="{ value, row }">
             <span :class="['badge', value === 'admin' ? 'badge-purple' : 'badge-gray']">
-              {{ t('admin.users.roles.' + value) }}
+              {{ row.admin_role?.name || t('admin.users.roles.' + value) }}
             </span>
           </template>
 
@@ -371,7 +367,7 @@
                   <div class="border-b border-gray-100 px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider text-gray-400 dark:border-dark-600 dark:text-dark-400">
                     {{ t('admin.users.clickToReplace') }}
                   </div>
-                  <div
+                  <div v-permission="'users.execute'"
                     v-for="g in getUserGroups(row).exclusive"
                     :key="g.id"
                     class="flex cursor-pointer items-center gap-2 px-3 py-2 text-gray-700 transition-colors hover:bg-primary-50 hover:text-primary-600 dark:text-dark-200 dark:hover:bg-primary-900/30 dark:hover:text-primary-400"
@@ -435,7 +431,7 @@
           <template #cell-balance="{ value, row }">
             <div class="flex items-center gap-2">
               <div class="group relative">
-                <button
+                <button v-permission="'users.balance.read'"
                   class="font-medium text-gray-900 underline decoration-dashed decoration-gray-300 underline-offset-4 transition-colors hover:text-primary-600 dark:text-white dark:decoration-dark-500 dark:hover:text-primary-400"
                   @click="handleBalanceHistory(row)"
                 >
@@ -447,7 +443,7 @@
                   <div class="absolute left-1/2 top-full -translate-x-1/2 border-4 border-transparent border-t-gray-900 dark:border-t-dark-600"></div>
                 </div>
               </div>
-              <button
+              <button v-permission="row.role === 'admin' || row.admin_role_id ? 'builtin_admin' : 'users.balance.write'"
                 @click.stop="handleDeposit(row)"
                 class="rounded px-2 py-0.5 text-xs font-medium text-emerald-600 transition-colors hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
                 :title="t('admin.users.deposit')"
@@ -458,7 +454,7 @@
           </template>
 
           <template #cell-balance_platform_quota="{ row }">
-            <button
+            <button v-permission="'users.quotas.read'"
               type="button"
               class="block text-left underline decoration-dashed decoration-gray-300 underline-offset-4 transition-colors hover:decoration-primary-400 dark:decoration-dark-500"
               :title="t('admin.users.platformQuota.cellColumnTooltip')"
@@ -613,7 +609,7 @@
           <template #cell-actions="{ row }">
             <div class="flex items-center gap-1">
               <!-- Edit Button -->
-              <button
+              <button v-permission="row.role === 'admin' || row.admin_role_id ? 'builtin_admin' : 'users.update'"
                 @click="handleEdit(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
               >
@@ -622,7 +618,7 @@
               </button>
 
               <!-- Toggle Status Button (not for admin) -->
-              <button
+              <button v-permission="row.role === 'admin' || row.admin_role_id ? 'builtin_admin' : 'users.update'"
                 v-if="row.role !== 'admin'"
                 @click="handleToggleStatus(row)"
                 :class="[
@@ -650,7 +646,7 @@
           </template>
 
           <template #empty>
-            <EmptyState
+            <EmptyState v-permission="'users.create'"
               :title="t('admin.users.noUsersYet')"
               :description="t('admin.users.createFirstUser')"
               :action-text="t('admin.users.createUser')"
@@ -684,7 +680,7 @@
           <template v-for="user in users" :key="user.id">
             <template v-if="user.id === activeMenuId">
               <!-- View API Keys -->
-              <button
+              <button v-permission="'api_keys.read'"
                 @click="handleViewApiKeys(user); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
               >
@@ -693,14 +689,7 @@
               </button>
 
               <!-- Allowed Groups -->
-              <button
-                @click="groupViewUser = user; showGroupViewModal = true; closeActionMenu()"
-                class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
-              >
-                <Icon name="users" size="sm" class="text-gray-400" :stroke-width="2" />
-                {{ t('groupView.grantsTitle') }}
-              </button>
-              <button
+              <button v-permission="user.role === 'admin' || user.admin_role_id ? 'builtin_admin' : 'users.update'"
                 @click="handleAllowedGroups(user); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
               >
@@ -711,7 +700,7 @@
               <div class="my-1 border-t border-gray-100 dark:border-dark-700"></div>
 
               <!-- Deposit -->
-              <button
+              <button v-permission="user.role === 'admin' || user.admin_role_id ? 'builtin_admin' : 'users.balance.write'"
                 @click="handleDeposit(user); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
               >
@@ -720,7 +709,7 @@
               </button>
 
               <!-- Withdraw -->
-              <button
+              <button v-permission="user.role === 'admin' || user.admin_role_id ? 'builtin_admin' : 'users.balance.write'"
                 @click="handleWithdraw(user); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
               >
@@ -731,7 +720,7 @@
               </button>
 
               <!-- Platform Quotas -->
-              <button
+              <button v-permission="'users.quotas.read'"
                 @click="handlePlatformQuota(user); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
               >
@@ -740,7 +729,7 @@
               </button>
 
               <!-- Balance History -->
-              <button
+              <button v-permission="'users.balance.read'"
                 @click="handleBalanceHistory(user); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-dark-700"
               >
@@ -751,7 +740,7 @@
               <div class="my-1 border-t border-gray-100 dark:border-dark-700"></div>
 
               <!-- Delete (not for admin) -->
-              <button
+              <button v-permission="user.admin_role_id ? 'builtin_admin' : 'users.delete'"
                 v-if="user.role !== 'admin'"
                 @click="handleDelete(user); closeActionMenu()"
                 class="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
@@ -791,9 +780,8 @@
     />
     <UserApiKeysModal :show="showApiKeysModal" :user="viewingUser" @close="closeApiKeysModal" />
     <UserAllowedGroupsModal :show="showAllowedGroupsModal" :user="allowedGroupsUser" @close="closeAllowedGroupsModal" @success="loadUsers" />
-    <UserGroupViewGrantsModal :show="showGroupViewModal" :user="groupViewUser" @close="showGroupViewModal = false; groupViewUser = null" />
     <UserBalanceModal :show="showBalanceModal" :user="balanceUser" :operation="balanceOperation" @close="closeBalanceModal" @success="loadUsers" />
-    <UserBalanceHistoryModal :show="showBalanceHistoryModal" :user="balanceHistoryUser" @close="closeBalanceHistoryModal" @deposit="handleDepositFromHistory" @withdraw="handleWithdrawFromHistory" />
+    <UserBalanceHistoryModal :hide-actions="!auth.can('users.balance.write') || (!auth.isAdmin && !!balanceHistoryUser && (balanceHistoryUser.role === 'admin' || !!balanceHistoryUser.admin_role_id))" :show="showBalanceHistoryModal" :user="balanceHistoryUser" @close="closeBalanceHistoryModal" @deposit="handleDepositFromHistory" @withdraw="handleWithdrawFromHistory" />
     <GroupReplaceModal :show="showGroupReplaceModal" :user="groupReplaceUser" :old-group="groupReplaceOldGroup" :all-groups="allGroups" @close="closeGroupReplaceModal" @success="loadUsers" />
     <UserAttributesConfigModal :show="showAttributesModal" @close="handleAttributesModalClose" />
   </AppLayout>
@@ -802,14 +790,16 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
-import { getPersistedPageSize } from '@/composables/usePersistedPageSize'
 import { useTableSelection } from '@/composables/useTableSelection'
 import { formatDateTime } from '@/utils/format'
 import Icon from '@/components/icons/Icon.vue'
 
 const { t } = useI18n()
 import { adminAPI } from '@/api/admin'
+import rolesAPI from '@/api/admin/roles'
+import type { AdminRole } from '@/types'
 import type { AdminUser, AdminGroup, UserAttributeDefinition } from '@/types'
 import type { BatchUserUsageStats } from '@/api/admin/dashboard'
 import type { PlatformQuotaItem } from '@/api/admin/users'
@@ -835,12 +825,20 @@ import BulkEditUserModal from '@/components/admin/user/BulkEditUserModal.vue'
 import UserPlatformQuotaModal from '@/components/admin/user/UserPlatformQuotaModal.vue'
 import UserApiKeysModal from '@/components/admin/user/UserApiKeysModal.vue'
 import UserAllowedGroupsModal from '@/components/admin/user/UserAllowedGroupsModal.vue'
-import UserGroupViewGrantsModal from '@/components/admin/user/UserGroupViewGrantsModal.vue'
 import UserBalanceModal from '@/components/admin/user/UserBalanceModal.vue'
 import UserBalanceHistoryModal from '@/components/admin/user/UserBalanceHistoryModal.vue'
 import GroupReplaceModal from '@/components/admin/user/GroupReplaceModal.vue'
 
 const appStore = useAppStore()
+const auth = useAuthStore()
+const customRoles = ref<AdminRole[]>([])
+const roleFilterOptions = computed(() => [
+  { value: '', label: t('admin.users.allRoles') },
+  { value: 'admin', label: t('admin.users.admin') },
+  { value: 'user', label: t('admin.users.user') },
+  ...customRoles.value.map(role => ({ value: `role:${role.id}`, label: role.name }))
+])
+
 
 // Generate dynamic attribute columns from enabled definitions
 const attributeColumns = computed<Column[]>(() =>
@@ -1074,6 +1072,7 @@ const sortState = reactive(loadInitialSortState())
 // Groups data for the groups column and the existing "authorised group" filter (active only)
 const allGroups = ref<AdminGroup[]>([])
 const loadAllGroups = async () => {
+  if (!auth.can('groups.read')) return
   if (allGroups.value.length > 0) return
   try {
     allGroups.value = await adminAPI.groups.getAll()
@@ -1086,6 +1085,7 @@ const loadAllGroups = async () => {
 // filter users whose keys are still bound to a now-disabled group.
 const allGroupsForApiKeyFilter = ref<AdminGroup[]>([])
 const loadAllGroupsForApiKeyFilter = async () => {
+  if (!auth.can('groups.read')) return
   if (allGroupsForApiKeyFilter.value.length > 0) return
   try {
     allGroupsForApiKeyFilter.value = await adminAPI.groups.getAllIncludingInactive()
@@ -1332,7 +1332,7 @@ const {
 })
 
 const handleSelectedKeysUpdate = (keys: Array<string | number>) => {
-  setSelectedIds(keys.filter((key): key is number => typeof key === 'number'))
+  setSelectedIds(keys.filter((key): key is number => typeof key === 'number' && (auth.isAdmin || !users.value.some(user => user.id === key && (user.role === 'admin' || user.admin_role_id)))))
 }
 
 const getUserSelectionLabel = (user: AdminUser) =>
@@ -1343,7 +1343,7 @@ const attributeDefinitions = ref<UserAttributeDefinition[]>([])
 const userAttributeValues = ref<Record<number, Record<number, string>>>({})
 const pagination = reactive({
   page: 1,
-  page_size: getPersistedPageSize(),
+  page_size: 50,
   total: 0,
   pages: 0
 })
@@ -1383,7 +1383,7 @@ const loadUsersSecondaryData = async (
 
   const tasks: Promise<void>[] = []
 
-  if (hasVisibleUsageColumn.value) {
+  if (hasVisibleUsageColumn.value && auth.can('dashboard.read')) {
     tasks.push(
       (async () => {
         try {
@@ -1415,7 +1415,7 @@ const loadUsersSecondaryData = async (
     )
   }
 
-  if (hasVisiblePlatformQuotaColumn.value) {
+  if (hasVisiblePlatformQuotaColumn.value && auth.can('users.quotas.read')) {
     tasks.push(
       (async () => {
         try {
@@ -1546,8 +1546,6 @@ const handleClickOutside = (event: MouseEvent) => {
 
 // Allowed groups modal state
 const showAllowedGroupsModal = ref(false)
-const showGroupViewModal = ref(false)
-const groupViewUser = ref<AdminUser | null>(null)
 const allowedGroupsUser = ref<AdminUser | null>(null)
 
 // Expanded group dropdown state (click to show exclusive groups list)
@@ -1579,6 +1577,7 @@ const getDaysRemaining = (expiresAt: string): number => {
 }
 
 const loadAttributeDefinitions = async () => {
+  if (!auth.can('user_attributes.read')) return
   try {
     attributeDefinitions.value = await adminAPI.userAttributes.listEnabledDefinitions()
   } catch (e) {
@@ -1612,7 +1611,8 @@ const loadUsers = async () => {
       pagination.page,
       pagination.page_size,
       {
-        role: filters.role as any,
+        role: filters.role.startsWith('role:') ? 'user' : filters.role as 'user' | 'admin',
+        admin_role_id: filters.role.startsWith('role:') ? Number(filters.role.slice(5)) : filters.role === 'user' ? 0 : undefined,
         status: filters.status as any,
         search: searchQuery.value || undefined,
         group_name: filters.group || undefined,
@@ -1900,6 +1900,9 @@ const handleScroll = () => {
 }
 
 onMounted(async () => {
+  if (auth.isAdmin) {
+    void rolesAPI.list(1, 1000).then(result => { customRoles.value = result.items }).catch(error => { appStore.showError(error instanceof Error ? error.message : t('roles.loadFailed')) })
+  }
   await loadAttributeDefinitions()
   loadSavedFilters()
   loadSavedColumns()

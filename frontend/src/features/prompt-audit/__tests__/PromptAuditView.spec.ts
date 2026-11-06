@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('../api', () => ({ default: mocks }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isAdmin: true, canAccessAdmin: true, can: () => true }) }))
 vi.mock('@/stores/app', () => ({ useAppStore: () => ({ showSuccess: mocks.showSuccess, showError: mocks.showError }) }))
 vi.mock('vue-i18n', async () => {
   const actual = await vi.importActual<typeof import('vue-i18n')>('vue-i18n')

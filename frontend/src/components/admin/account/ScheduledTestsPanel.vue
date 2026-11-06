@@ -11,7 +11,7 @@
         <p class="text-sm text-gray-500 dark:text-gray-400">
           {{ t('admin.scheduledTests.title') }}
         </p>
-        <button
+        <button v-permission="'scheduled_tests.create'"
           @click="showAddForm = !showAddForm"
           class="btn btn-primary flex items-center gap-1.5 text-sm"
         >
@@ -109,13 +109,13 @@
           </div>
         </div>
         <div class="mt-3 flex justify-end gap-2">
-          <button
+          <button v-permission="'scheduled_tests.create'"
             @click="showAddForm = false; resetNewPlan()"
             class="rounded-lg bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:bg-dark-600 dark:text-gray-300 dark:hover:bg-dark-500"
           >
             {{ t('common.cancel') }}
           </button>
-          <button
+          <button v-permission="'scheduled_tests.create'"
             @click="handleCreate"
             :disabled="!newPlan.model_id || !newPlan.cron_expression || creating"
             class="flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"
@@ -169,6 +169,7 @@
               <!-- Enabled Toggle -->
               <div class="flex items-center gap-1.5" @click.stop>
                 <Toggle
+                  v-permission="'scheduled_tests.update'"
                   :model-value="plan.enabled"
                   @update:model-value="(val: boolean) => handleToggleEnabled(plan, val)"
                 />
@@ -201,14 +202,14 @@
 
               <!-- Actions -->
               <div class="flex items-center gap-1" @click.stop>
-                <button
+                <button v-permission="'scheduled_tests.update'"
                   @click="startEdit(plan)"
                   class="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-blue-50 hover:text-blue-500 dark:hover:bg-blue-900/20"
                   :title="t('admin.scheduledTests.editPlan')"
                 >
                   <Icon name="edit" size="sm" :stroke-width="2" />
                 </button>
-                <button
+                <button v-permission="'scheduled_tests.delete'"
                   @click="confirmDeletePlan(plan)"
                   class="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20"
                   :title="t('admin.scheduledTests.deletePlan')"
@@ -325,7 +326,7 @@
               >
                 {{ t('common.cancel') }}
               </button>
-              <button
+              <button v-permission="'scheduled_tests.update'"
                 @click="handleEdit"
                 :disabled="!editForm.model_id || !editForm.cron_expression || updating"
                 class="flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-primary-600 disabled:cursor-not-allowed disabled:opacity-50"

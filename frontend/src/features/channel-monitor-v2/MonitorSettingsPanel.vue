@@ -18,6 +18,7 @@
         type="button"
         class="btn btn-primary"
         :disabled="saving || !dirty"
+        v-permission="'channel_monitor_v2.update'"
         @click="save"
       >
         <Icon name="check" size="sm" />

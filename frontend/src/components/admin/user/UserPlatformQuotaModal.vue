@@ -40,7 +40,7 @@
                     class="input w-24"
                     :placeholder="t('admin.users.platformQuota.placeholder')"
                   />
-                  <button
+                  <button v-permission="user?.role === 'admin' || user?.admin_role_id ? 'builtin_admin' : 'users.quotas.write'"
                     type="button"
                     class="text-xs text-gray-400 hover:text-amber-500 disabled:opacity-50"
                     :disabled="!!resetting[`${row.platform}.daily`] || !savedConfigured.has(row.platform)"
@@ -59,7 +59,7 @@
                     class="input w-24"
                     :placeholder="t('admin.users.platformQuota.placeholder')"
                   />
-                  <button
+                  <button v-permission="user?.role === 'admin' || user?.admin_role_id ? 'builtin_admin' : 'users.quotas.write'"
                     type="button"
                     class="text-xs text-gray-400 hover:text-amber-500 disabled:opacity-50"
                     :disabled="!!resetting[`${row.platform}.weekly`] || !savedConfigured.has(row.platform)"
@@ -78,7 +78,7 @@
                     class="input w-24"
                     :placeholder="t('admin.users.platformQuota.placeholder')"
                   />
-                  <button
+                  <button v-permission="user?.role === 'admin' || user?.admin_role_id ? 'builtin_admin' : 'users.quotas.write'"
                     type="button"
                     class="text-xs text-gray-400 hover:text-amber-500 disabled:opacity-50"
                     :disabled="!!resetting[`${row.platform}.monthly`] || !savedConfigured.has(row.platform)"
@@ -95,7 +95,7 @@
         </table>
         <p class="mt-3 text-xs text-gray-500">{{ t('admin.users.platformQuota.hint') }}</p>
         <div class="mt-3">
-          <button type="button" class="btn btn-secondary text-sm" @click="onClearAll">
+          <button v-permission="user?.role === 'admin' || user?.admin_role_id ? 'builtin_admin' : 'users.quotas.write'" type="button" class="btn btn-secondary text-sm" @click="onClearAll">
             {{ t('admin.users.platformQuota.clearAll') }}
           </button>
         </div>
@@ -106,7 +106,7 @@
         <button type="button" class="btn btn-secondary" @click="$emit('close')">
           {{ t('admin.users.platformQuota.cancel') }}
         </button>
-        <button type="button" class="btn btn-primary" :disabled="submitting || loading" @click="onSave">
+        <button v-permission="user?.role === 'admin' || user?.admin_role_id ? 'builtin_admin' : 'users.quotas.write'" type="button" class="btn btn-primary" :disabled="submitting || loading" @click="onSave">
           {{ submitting ? t('admin.users.platformQuota.saving') : t('admin.users.platformQuota.save') }}
         </button>
       </div>

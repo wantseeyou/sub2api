@@ -14,7 +14,10 @@ import (
 	"strings"
 	"time"
 
+	dbent "github.com/Wei-Shaw/sub2api/ent"
+	dbaccount "github.com/Wei-Shaw/sub2api/ent/account"
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/adminaccess"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
@@ -577,13 +580,50 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 	return account, nil
 }
 
+// UpdateAccount 在锁定账号后应用获授权的配置更新，避免覆盖并发重授权产生的新凭证。
 func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *UpdateAccountInput) (*Account, error) {
+	if s.entClient != nil && dbent.TxFromContext(ctx) == nil {
+		tx, err := s.entClient.Tx(ctx)
+		if err != nil {
+			return nil, err
+		}
+		defer tx.Rollback()
+		updated, err := s.UpdateAccount(dbent.NewTxContext(ctx, tx), id, input)
+		if err != nil {
+			return nil, err
+		}
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+		return updated, nil
+	}
+	if tx := dbent.TxFromContext(ctx); tx != nil {
+		if _, err := tx.Client().Account.Query().Where(dbaccount.IDEQ(id)).Select(dbaccount.FieldID).ForUpdate().Only(ctx); err != nil {
+			if dbent.IsNotFound(err) {
+				return nil, ErrAccountNotFound
+			}
+			return nil, err
+		}
+	}
 	account, err := s.accountRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 	if account.Platform == PlatformTypeSafe && input.Type != "" && input.Type != AccountTypeAPIKey {
 		return nil, errors.New("typesafe accounts only support apikey credentials")
+	}
+	role := adminaccess.RoleFromContext(ctx)
+	extraPatch := input.Extra
+	if role != nil && input.Extra != nil {
+		copy := *input
+		copy.Extra = applyRoleAccountMapPatch(account.Extra, input.Extra)
+		// 未提交的探测开关仍由后面的受管字段保留逻辑处理。
+		for _, key := range []string{UpstreamBillingProbeEnabledExtraKey, UpstreamBillingRateSyncEnabledExtraKey} {
+			if _, provided := extraPatch[key]; !provided {
+				delete(copy.Extra, key)
+			}
+		}
+		input = &copy
 	}
 	var normalizedExtra map[string]any
 	if input.Extra != nil {
@@ -605,6 +645,13 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		}
 		if err := ValidateUpstreamRequestIDHeaderExtra(normalizedExtra); err != nil {
 			return nil, err
+		}
+		if role != nil {
+			for key, value := range extraPatch {
+				if value == nil {
+					delete(normalizedExtra, key)
+				}
+			}
 		}
 	}
 	previousProbeIdentity := upstreamBillingProbeIdentity(account)
@@ -649,11 +696,24 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		account.Notes = normalizeAccountNotes(input.Notes)
 	}
 	if account.IsCredentialShadow() && input.Credentials != nil {
-		account.Credentials = sanitizeSparkShadowCredentials(input.Credentials)
+		credentials := input.Credentials
+		if role != nil {
+			credentials = applyRoleAccountMapPatch(account.Credentials, credentials)
+		}
+		account.Credentials = sanitizeSparkShadowCredentials(credentials)
 	} else if len(input.Credentials) > 0 {
 		// 敏感子键采用"incoming 没提供就保留"的合并语义：前端响应已脱敏，
 		// 全对象 PUT 编辑时不会再带回 token，避免覆盖时清空已有凭证。
-		account.Credentials = MergePreservingSensitiveCreds(account.Credentials, input.Credentials)
+		if role != nil {
+			for key, value := range input.Credentials {
+				if value == nil && (IsSensitiveCredentialKey(key) || key == "client_secret" || key == "_token_version") {
+					return nil, infraerrors.BadRequest("INVALID_CREDENTIAL_PATCH", "认证字段不支持通过空值删除")
+				}
+			}
+			account.Credentials = applyRoleAccountMapPatch(account.Credentials, input.Credentials)
+		} else {
+			account.Credentials = MergePreservingSensitiveCreds(account.Credentials, input.Credentials)
+		}
 		// 校验并规范化请求头覆写配置（header 名小写化、格式检查）
 		if err := NormalizeHeaderOverrideCredentials(account.Credentials); err != nil {
 			return nil, err
@@ -930,6 +990,20 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		return nil, err
 	}
 	return updated, nil
+}
+
+// applyRoleAccountMapPatch 保留未提交的配置键，并以显式 null 删除已授权提交的键。
+func applyRoleAccountMapPatch(current, patch map[string]any) map[string]any {
+	result := make(map[string]any, len(current)+len(patch))
+	maps.Copy(result, current)
+	for key, value := range patch {
+		if value == nil {
+			delete(result, key)
+		} else {
+			result[key] = value
+		}
+	}
+	return result
 }
 
 // UpdateAccountExtra 仅对 Extra JSONB 做 key 级合并，避免覆盖其它运行态键

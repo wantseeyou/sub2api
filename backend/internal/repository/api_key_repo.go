@@ -937,6 +937,8 @@ func userEntityToService(u *dbent.User) *service.User {
 		Notes:                      u.Notes,
 		PasswordHash:               u.PasswordHash,
 		Role:                       u.Role,
+		AdminRoleID:                u.AdminRoleID,
+		AdminRole:                  service.AdminRoleFromEntity(u.Edges.AdminRole),
 		Balance:                    u.Balance,
 		FrozenBalance:              u.FrozenBalance,
 		Concurrency:                u.Concurrency,

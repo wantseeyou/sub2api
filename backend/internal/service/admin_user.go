@@ -130,12 +130,16 @@ func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInpu
 	if err != nil {
 		return nil, err
 	}
+	if input.AdminRoleID != nil && (*input.AdminRoleID < 0 || (*input.AdminRoleID > 0 && role != RoleUser)) {
+		return nil, infraerrors.BadRequest("INVALID_ADMIN_ROLE", "自定义角色只能分配给普通用户身份")
+	}
 
 	user := &User{
 		Email:         input.Email,
 		Username:      input.Username,
 		Notes:         input.Notes,
 		Role:          role,
+		AdminRoleID:   input.AdminRoleID,
 		Balance:       balance,
 		Concurrency:   input.Concurrency,
 		RPMLimit:      input.RPMLimit,
@@ -143,6 +147,9 @@ func (s *adminServiceImpl) CreateUser(ctx context.Context, input *CreateUserInpu
 		AllowedGroups: input.AllowedGroups,
 
 		RestrictPublicGroups: input.RestrictPublicGroups,
+	}
+	if user.AdminRoleID != nil && *user.AdminRoleID == 0 {
+		user.AdminRoleID = nil
 	}
 	if err := user.SetPassword(input.Password); err != nil {
 		return nil, err
@@ -265,6 +272,21 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 		user.Role = role
 		fields.Role = true
 	}
+	if input.AdminRoleID != nil || input.Role == RoleAdmin {
+		if input.AdminRoleID != nil && (*input.AdminRoleID < 0 || (*input.AdminRoleID > 0 && user.Role != RoleUser)) {
+			return nil, infraerrors.BadRequest("INVALID_ADMIN_ROLE", "自定义角色只能分配给普通用户身份")
+		}
+		var nextRoleID *int64
+		if input.AdminRoleID != nil && *input.AdminRoleID > 0 {
+			nextRoleID = input.AdminRoleID
+		}
+		if (user.AdminRoleID == nil) != (nextRoleID == nil) ||
+			(user.AdminRoleID != nil && nextRoleID != nil && *user.AdminRoleID != *nextRoleID) {
+			user.AdminRoleID = nextRoleID
+			user.AdminRole = nil
+			fields.AdminRoleID = true
+		}
+	}
 
 	if input.Concurrency != nil {
 		user.Concurrency = *input.Concurrency
@@ -307,7 +329,7 @@ func (s *adminServiceImpl) UpdateUser(ctx context.Context, id int64, input *Upda
 	if s.authCacheInvalidator != nil {
 		// RPMLimit 直接参与 billing_cache_service.checkRPM 的三级级联，
 		// allowed_groups 参与 API Key 专属分组授权判断；不失效缓存会让修改在一个 L2 TTL 内失去效果。
-		if user.Concurrency != oldConcurrency || user.Status != oldStatus || user.Role != oldRole || user.RPMLimit != oldRPMLimit || user.RestrictPublicGroups != oldRestrictPublicGroups || !sameInt64Set(user.AllowedGroups, oldAllowedGroups) {
+		if fields.AdminRoleID || user.Concurrency != oldConcurrency || user.Status != oldStatus || user.Role != oldRole || user.RPMLimit != oldRPMLimit || user.RestrictPublicGroups != oldRestrictPublicGroups || !sameInt64Set(user.AllowedGroups, oldAllowedGroups) {
 			s.authCacheInvalidator.InvalidateAuthCacheByUserID(ctx, user.ID)
 		}
 	}
@@ -951,6 +973,9 @@ func (s *adminServiceImpl) BindUserAuthIdentity(ctx context.Context, userID int6
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	if err := LockRoleUserMutationTarget(ctx, tx.Client(), userID); err != nil {
+		return nil, err
+	}
 	identityRecords, err := tx.AuthIdentity.Query().
 		Where(
 			authidentity.ProviderTypeEQ(providerType),

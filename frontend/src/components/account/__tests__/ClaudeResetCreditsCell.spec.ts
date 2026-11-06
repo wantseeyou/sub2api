@@ -1,3 +1,4 @@
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isAdmin: true, can: () => true }) }))
 import { mount, flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ClaudeResetCreditsCell from '../ClaudeResetCreditsCell.vue'

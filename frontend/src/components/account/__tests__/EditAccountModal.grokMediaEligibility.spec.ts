@@ -19,7 +19,7 @@ const {
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({ showError: showErrorMock, showSuccess: vi.fn(), showInfo: vi.fn() })
 }))
-vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ get isSimpleMode() { return authIsSimpleMode.value } }) }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isAdmin: true, can: () => true, get isSimpleMode() { return authIsSimpleMode.value } }) }))
 vi.mock('@/api/admin', () => ({
   adminAPI: {
     accounts: {

@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Wei-Shaw/sub2api/ent/adminrole"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
@@ -105,6 +106,26 @@ func (_u *UserUpdate) SetNillableRole(v *string) *UserUpdate {
 	if v != nil {
 		_u.SetRole(*v)
 	}
+	return _u
+}
+
+// SetAdminRoleID sets the "admin_role_id" field.
+func (_u *UserUpdate) SetAdminRoleID(v int64) *UserUpdate {
+	_u.mutation.SetAdminRoleID(v)
+	return _u
+}
+
+// SetNillableAdminRoleID sets the "admin_role_id" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableAdminRoleID(v *int64) *UserUpdate {
+	if v != nil {
+		_u.SetAdminRoleID(*v)
+	}
+	return _u
+}
+
+// ClearAdminRoleID clears the value of the "admin_role_id" field.
+func (_u *UserUpdate) ClearAdminRoleID() *UserUpdate {
+	_u.mutation.ClearAdminRoleID()
 	return _u
 }
 
@@ -446,6 +467,11 @@ func (_u *UserUpdate) AddRpmLimit(v int) *UserUpdate {
 	return _u
 }
 
+// SetAdminRole sets the "admin_role" edge to the AdminRole entity.
+func (_u *UserUpdate) SetAdminRole(v *AdminRole) *UserUpdate {
+	return _u.SetAdminRoleID(v.ID)
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_u *UserUpdate) AddAPIKeyIDs(ids ...int64) *UserUpdate {
 	_u.mutation.AddAPIKeyIDs(ids...)
@@ -644,6 +670,12 @@ func (_u *UserUpdate) AddPlatformQuotas(v ...*UserPlatformQuota) *UserUpdate {
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdate) Mutation() *UserMutation {
 	return _u.mutation
+}
+
+// ClearAdminRole clears the "admin_role" edge to the AdminRole entity.
+func (_u *UserUpdate) ClearAdminRole() *UserUpdate {
+	_u.mutation.ClearAdminRole()
+	return _u
 }
 
 // ClearAPIKeys clears all "api_keys" edges to the APIKey entity.
@@ -1115,6 +1147,35 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.AddedRpmLimit(); ok {
 		_spec.AddField(user.FieldRpmLimit, field.TypeInt, value)
+	}
+	if _u.mutation.AdminRoleCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   user.AdminRoleTable,
+			Columns: []string{user.AdminRoleColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(adminrole.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.AdminRoleIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   user.AdminRoleTable,
+			Columns: []string{user.AdminRoleColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(adminrole.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{
@@ -1801,6 +1862,26 @@ func (_u *UserUpdateOne) SetNillableRole(v *string) *UserUpdateOne {
 	return _u
 }
 
+// SetAdminRoleID sets the "admin_role_id" field.
+func (_u *UserUpdateOne) SetAdminRoleID(v int64) *UserUpdateOne {
+	_u.mutation.SetAdminRoleID(v)
+	return _u
+}
+
+// SetNillableAdminRoleID sets the "admin_role_id" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableAdminRoleID(v *int64) *UserUpdateOne {
+	if v != nil {
+		_u.SetAdminRoleID(*v)
+	}
+	return _u
+}
+
+// ClearAdminRoleID clears the value of the "admin_role_id" field.
+func (_u *UserUpdateOne) ClearAdminRoleID() *UserUpdateOne {
+	_u.mutation.ClearAdminRoleID()
+	return _u
+}
+
 // SetBalance sets the "balance" field.
 func (_u *UserUpdateOne) SetBalance(v float64) *UserUpdateOne {
 	_u.mutation.ResetBalance()
@@ -2139,6 +2220,11 @@ func (_u *UserUpdateOne) AddRpmLimit(v int) *UserUpdateOne {
 	return _u
 }
 
+// SetAdminRole sets the "admin_role" edge to the AdminRole entity.
+func (_u *UserUpdateOne) SetAdminRole(v *AdminRole) *UserUpdateOne {
+	return _u.SetAdminRoleID(v.ID)
+}
+
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
 func (_u *UserUpdateOne) AddAPIKeyIDs(ids ...int64) *UserUpdateOne {
 	_u.mutation.AddAPIKeyIDs(ids...)
@@ -2337,6 +2423,12 @@ func (_u *UserUpdateOne) AddPlatformQuotas(v ...*UserPlatformQuota) *UserUpdateO
 // Mutation returns the UserMutation object of the builder.
 func (_u *UserUpdateOne) Mutation() *UserMutation {
 	return _u.mutation
+}
+
+// ClearAdminRole clears the "admin_role" edge to the AdminRole entity.
+func (_u *UserUpdateOne) ClearAdminRole() *UserUpdateOne {
+	_u.mutation.ClearAdminRole()
+	return _u
 }
 
 // ClearAPIKeys clears all "api_keys" edges to the APIKey entity.
@@ -2838,6 +2930,35 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.AddedRpmLimit(); ok {
 		_spec.AddField(user.FieldRpmLimit, field.TypeInt, value)
+	}
+	if _u.mutation.AdminRoleCleared() {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   user.AdminRoleTable,
+			Columns: []string{user.AdminRoleColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(adminrole.FieldID, field.TypeInt64),
+			},
+		}
+		_spec.Edges.Clear = append(_spec.Edges.Clear, edge)
+	}
+	if nodes := _u.mutation.AdminRoleIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   user.AdminRoleTable,
+			Columns: []string{user.AdminRoleColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(adminrole.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_spec.Edges.Add = append(_spec.Edges.Add, edge)
 	}
 	if _u.mutation.APIKeysCleared() {
 		edge := &sqlgraph.EdgeSpec{

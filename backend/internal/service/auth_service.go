@@ -1690,7 +1690,8 @@ type TokenPair struct {
 // TokenPairWithUser extends TokenPair with user role for backend mode checks
 type TokenPairWithUser struct {
 	TokenPair
-	UserRole string
+	UserRole       string
+	HasAdminAccess bool // 当前用户是否具有已启用的后台角色权限。
 }
 
 // GenerateTokenPair 生成Access Token和Refresh Token对
@@ -1865,8 +1866,9 @@ func (s *AuthService) RefreshTokenPair(ctx context.Context, refreshToken string)
 		return nil, err
 	}
 	return &TokenPairWithUser{
-		TokenPair: *pair,
-		UserRole:  user.Role,
+		TokenPair:      *pair,
+		UserRole:       user.Role,
+		HasAdminAccess: user.HasAdminAccess(),
 	}, nil
 }
 

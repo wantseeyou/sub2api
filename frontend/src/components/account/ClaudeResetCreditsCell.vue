@@ -12,6 +12,7 @@
       <slot name="pre-actions" />
 
       <button
+        v-permission="'accounts.test'"
         v-if="visible"
         type="button"
         data-testid="claude-reset-count"
@@ -38,6 +39,7 @@
       </button>
 
       <button
+        v-permission="'accounts.quota.reset'"
         v-if="visible"
         type="button"
         data-testid="claude-reset-redeem"
@@ -119,6 +121,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useAuthStore } from '@/stores/auth'
 import type { Account } from '@/types'
 import {
   getClaudeResetCredits,
@@ -132,6 +135,7 @@ const props = defineProps<{ account: Account }>()
 // Fired after a redemption attempt so the parent can refresh the usage row.
 const emit = defineEmits<{ redeemed: [outcome: ClaudeResetOutcome] }>()
 const { t } = useI18n()
+const auth = useAuthStore()
 const status = ref<ClaudeResetCredits | null>(null)
 const loading = ref(false)
 const error = ref(false)
@@ -316,7 +320,7 @@ async function confirmRedeem() {
 }
 
 async function refresh() {
-  if (loading.value || redeeming.value) return
+  if (!auth.can('accounts.test') || loading.value || redeeming.value) return
   const current = ++generation
   loading.value = true
   error.value = false

@@ -85,6 +85,8 @@ export interface User {
   oidc_bound?: boolean
   wechat_bound?: boolean
   role: 'admin' | 'user' // User role for authorization
+  admin_role_id?: number | null // 自定义后台角色 ID。
+  admin_role?: AdminRole | null // 当前分配的后台角色。
   balance: number // User balance for API usage
   frozen_balance?: number // Balance currently held by async batch jobs
   concurrency: number // Allowed concurrent requests
@@ -2149,7 +2151,27 @@ export interface ApiKeyUsageTrendPoint {
 
 // ==================== Admin User Management ====================
 
+export interface AdminRole {
+  id: number // 角色 ID。
+  name: string // 角色名称。
+  description: string // 角色说明。
+  enabled: boolean // 是否启用。
+  permissions: string[] // 已授予的操作权限。
+  user_count: number // 已分配用户数。
+  created_at: string // 创建时间。
+  updated_at: string // 更新时间。
+}
+
+export interface AdminPermission {
+  id: string // 权限标识。
+  label: string // 操作名称。
+  category: string // 所属模块。
+  read: boolean // 是否为常规读取。
+  sensitive: boolean // 是否涉及敏感内容。
+}
+
 export interface UpdateUserRequest {
+  admin_role_id?: number // 自定义后台角色 ID，0 表示清除。
   email?: string
   password?: string
   username?: string

@@ -12,7 +12,7 @@
           <button class="btn btn-secondary px-2 md:px-3" :disabled="loading" :title="t('common.refresh')" @click="loadRecords">
             <Icon name="refresh" size="md" :class="loading ? 'animate-spin' : ''" />
           </button>
-          <button
+          <button v-permission="'affiliates.execute'"
             v-if="props.type === 'transfers'"
             type="button"
             class="btn btn-primary ml-auto"

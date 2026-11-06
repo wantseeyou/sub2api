@@ -85,6 +85,11 @@ func Role(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldRole, v))
 }
 
+// AdminRoleID applies equality check predicate on the "admin_role_id" field. It's identical to AdminRoleIDEQ.
+func AdminRoleID(v int64) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldAdminRoleID, v))
+}
+
 // Balance applies equality check predicate on the "balance" field. It's identical to BalanceEQ.
 func Balance(v float64) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldBalance, v))
@@ -503,6 +508,36 @@ func RoleEqualFold(v string) predicate.User {
 // RoleContainsFold applies the ContainsFold predicate on the "role" field.
 func RoleContainsFold(v string) predicate.User {
 	return predicate.User(sql.FieldContainsFold(FieldRole, v))
+}
+
+// AdminRoleIDEQ applies the EQ predicate on the "admin_role_id" field.
+func AdminRoleIDEQ(v int64) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldAdminRoleID, v))
+}
+
+// AdminRoleIDNEQ applies the NEQ predicate on the "admin_role_id" field.
+func AdminRoleIDNEQ(v int64) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldAdminRoleID, v))
+}
+
+// AdminRoleIDIn applies the In predicate on the "admin_role_id" field.
+func AdminRoleIDIn(vs ...int64) predicate.User {
+	return predicate.User(sql.FieldIn(FieldAdminRoleID, vs...))
+}
+
+// AdminRoleIDNotIn applies the NotIn predicate on the "admin_role_id" field.
+func AdminRoleIDNotIn(vs ...int64) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldAdminRoleID, vs...))
+}
+
+// AdminRoleIDIsNil applies the IsNil predicate on the "admin_role_id" field.
+func AdminRoleIDIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldAdminRoleID))
+}
+
+// AdminRoleIDNotNil applies the NotNil predicate on the "admin_role_id" field.
+func AdminRoleIDNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldAdminRoleID))
 }
 
 // BalanceEQ applies the EQ predicate on the "balance" field.
@@ -1398,6 +1433,29 @@ func RpmLimitLT(v int) predicate.User {
 // RpmLimitLTE applies the LTE predicate on the "rpm_limit" field.
 func RpmLimitLTE(v int) predicate.User {
 	return predicate.User(sql.FieldLTE(FieldRpmLimit, v))
+}
+
+// HasAdminRole applies the HasEdge predicate on the "admin_role" edge.
+func HasAdminRole() predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := sqlgraph.NewStep(
+			sqlgraph.From(Table, FieldID),
+			sqlgraph.Edge(sqlgraph.M2O, true, AdminRoleTable, AdminRoleColumn),
+		)
+		sqlgraph.HasNeighbors(s, step)
+	})
+}
+
+// HasAdminRoleWith applies the HasEdge predicate on the "admin_role" edge with a given conditions (other predicates).
+func HasAdminRoleWith(preds ...predicate.AdminRole) predicate.User {
+	return predicate.User(func(s *sql.Selector) {
+		step := newAdminRoleStep()
+		sqlgraph.HasNeighborsWith(s, step, func(s *sql.Selector) {
+			for _, p := range preds {
+				p(s)
+			}
+		})
+	})
 }
 
 // HasAPIKeys applies the HasEdge predicate on the "api_keys" edge.

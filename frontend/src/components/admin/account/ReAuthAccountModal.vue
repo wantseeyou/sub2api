@@ -192,6 +192,8 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useAuthStore } from '@/stores/auth'
+import { apiClient } from '@/api/client'
 import { useAppStore } from '@/stores/app'
 import { adminAPI } from '@/api/admin'
 import {
@@ -231,6 +233,7 @@ const emit = defineEmits<{
 }>()
 
 const appStore = useAppStore()
+const auth = useAuthStore()
 const { t } = useI18n()
 
 // OAuth composables
@@ -369,12 +372,32 @@ const handleClose = () => {
 const handleGenerateUrl = async () => {
   if (!props.account) return
 
+  if (!auth.isAdmin) {
+    const client = isOpenAI.value ? openaiOAuth : isGemini.value ? geminiOAuth : isAntigravity.value ? antigravityOAuth : isGrok.value ? grokOAuth : claudeOAuth
+    client.loading.value = true
+    client.error.value = ''
+    try {
+      const { data } = await apiClient.post<{ auth_url: string; session_id: string; state?: string }>(`/admin/accounts/${props.account.id}/reauthorize/auth-url`, isAnthropic.value ? { type: addMethod.value } : {})
+      client.authUrl.value = data.auth_url
+      client.sessionId.value = data.session_id
+      const state = data.state || new URL(data.auth_url).searchParams.get('state') || ''
+      if (isOpenAI.value) openaiOAuth.oauthState.value = state
+      else if (isGemini.value) geminiOAuth.state.value = state
+      else if (isAntigravity.value) antigravityOAuth.state.value = state
+      else if (isGrok.value) grokOAuth.state.value = state
+    } catch (err) {
+      client.error.value = err instanceof Error ? err.message : t('admin.accounts.oauth.authFailed')
+      appStore.showError(client.error.value)
+    } finally { client.loading.value = false }
+    return
+  }
+
   if (isOpenAILike.value) {
     await openaiOAuth.generateAuthUrl(props.account.proxy_id)
   } else if (isGemini.value) {
     const creds = (props.account.credentials || {}) as Record<string, unknown>
     const tierId = typeof creds.tier_id === 'string' ? creds.tier_id : undefined
-    const projectId = geminiOAuthType.value === 'code_assist' ? oauthFlowRef.value?.projectId : undefined
+    const projectId = typeof creds.project_id === 'string' ? creds.project_id : undefined
     await geminiOAuth.generateAuthUrl(props.account.proxy_id, projectId, geminiOAuthType.value, tierId)
   } else if (isAntigravity.value) {
     await antigravityOAuth.generateAuthUrl(props.account.proxy_id)
@@ -385,11 +408,38 @@ const handleGenerateUrl = async () => {
   }
 }
 
+// submitReauthorization 仅提交授权输入，由服务端换取并保存凭证。
+async function submitReauthorization(method: 'code' | 'cookie' | 'refresh_token' | 'sso', input: string) {
+  if (!props.account) return
+  const client = isOpenAI.value ? openaiOAuth : isGemini.value ? geminiOAuth : isAntigravity.value ? antigravityOAuth : isGrok.value ? grokOAuth : claudeOAuth
+  client.loading.value = true
+  client.error.value = ''
+  try {
+    const state = oauthFlowRef.value?.oauthState || (isOpenAI.value ? openaiOAuth.oauthState.value : isGemini.value ? geminiOAuth.state.value : isAntigravity.value ? antigravityOAuth.state.value : isGrok.value ? grokOAuth.state.value : '')
+    const { data } = await apiClient.post<Account>(`/admin/accounts/${props.account.id}/reauthorize`, {
+      platform: props.account.platform,
+      method,
+      ...(isAnthropic.value ? { type: addMethod.value } : {}),
+      ...(method === 'code' ? { session_id: currentSessionId.value, code: input.trim(), state } : {}),
+      ...(method === 'cookie' ? { code: input.trim() } : {}),
+      ...(method === 'refresh_token' ? { refresh_token: input.trim().split('\n')[0] } : {}),
+      ...(method === 'sso' ? { sso_token: input.trim().split('\n')[0] } : {})
+    }, { timeout: 120000 })
+    appStore.showSuccess(t('admin.accounts.reAuthorizedSuccess'))
+    emit('reauthorized', data)
+    handleClose()
+  } catch (err) {
+    client.error.value = err instanceof Error ? err.message : t('admin.accounts.oauth.authFailed')
+    appStore.showError(client.error.value)
+  } finally { client.loading.value = false }
+}
+
 const handleExchangeCode = async () => {
   if (!props.account) return
 
   const authCode = oauthFlowRef.value?.authCode || ''
   if (!authCode.trim()) return
+  if (!auth.isAdmin) { await submitReauthorization('code', authCode); return }
 
   if (isOpenAILike.value) {
     // OpenAI OAuth flow
@@ -569,6 +619,7 @@ const handleExchangeCode = async () => {
 }
 
 const handleCookieAuth = async (sessionKey: string) => {
+  if (!auth.isAdmin) { await submitReauthorization('cookie', sessionKey); return }
   if (!props.account || isOpenAILike.value) return
 
   claudeOAuth.loading.value = true
@@ -628,6 +679,7 @@ const applyGrokReauthTokenInfo = async (tokenInfo: {
 
 /** Re-auth the existing account with one refresh token. */
 const handleValidateRefreshToken = async (refreshTokenInput: string) => {
+  if (!auth.isAdmin) { await submitReauthorization('refresh_token', refreshTokenInput); return }
   if (!props.account) return
   if (isGrok.value) {
     await handleGrokValidateRefreshToken(refreshTokenInput)
@@ -696,6 +748,7 @@ const handleValidateRefreshToken = async (refreshTokenInput: string) => {
 
 /** Re-auth with a single SSO cookie → Build OAuth (not batch create). */
 const handleGrokImportSSO = async (ssoInput: string) => {
+  if (!auth.isAdmin) { await submitReauthorization('sso', ssoInput); return }
   if (!props.account || !isGrok.value) return
   const ssoToken = ssoInput
     .split('\n')

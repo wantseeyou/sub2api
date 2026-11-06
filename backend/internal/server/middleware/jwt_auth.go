@@ -102,6 +102,7 @@ func jwtAuth(
 			Concurrency: user.Concurrency,
 		})
 		c.Set(string(ContextKeyUserRole), user.Role)
+		c.Set("has_admin_access", user.HasAdminAccess())
 		c.Set(ContextKeyAuthEmail, user.Email)
 		c.Set(ContextKeySessionID, claims.SessionID)
 		if activityToucher != nil {

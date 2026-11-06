@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { adminAPI } from '@/api'
 import type { CustomMenuItem } from '@/types'
+import { useAuthStore } from '@/stores/auth'
 
 export const useAdminSettingsStore = defineStore('adminSettings', () => {
   const loaded = ref(false)
@@ -57,23 +58,28 @@ export const useAdminSettingsStore = defineStore('adminSettings', () => {
 
     loading.value = true
     try {
+      const auth = useAuthStore()
       const [settings, paymentConfigResp] = await Promise.all([
-        adminAPI.settings.getSettings(),
-        adminAPI.payment.getConfig()
+        auth.can('settings.read') ? adminAPI.settings.getSettings() : Promise.resolve(null),
+        auth.can('payment.config.read') ? adminAPI.payment.getConfig() : Promise.resolve(null)
       ])
-      opsMonitoringEnabled.value = settings.ops_monitoring_enabled ?? true
-      writeCachedBool('ops_monitoring_enabled_cached', opsMonitoringEnabled.value)
+      if (settings) {
+        opsMonitoringEnabled.value = settings.ops_monitoring_enabled ?? true
+        writeCachedBool('ops_monitoring_enabled_cached', opsMonitoringEnabled.value)
 
-      opsRealtimeMonitoringEnabled.value = settings.ops_realtime_monitoring_enabled ?? true
-      writeCachedBool('ops_realtime_monitoring_enabled_cached', opsRealtimeMonitoringEnabled.value)
+        opsRealtimeMonitoringEnabled.value = settings.ops_realtime_monitoring_enabled ?? true
+        writeCachedBool('ops_realtime_monitoring_enabled_cached', opsRealtimeMonitoringEnabled.value)
 
-      opsQueryModeDefault.value = settings.ops_query_mode_default || 'auto'
-      writeCachedString('ops_query_mode_default_cached', opsQueryModeDefault.value)
+        opsQueryModeDefault.value = settings.ops_query_mode_default || 'auto'
+        writeCachedString('ops_query_mode_default_cached', opsQueryModeDefault.value)
 
-      customMenuItems.value = Array.isArray(settings.custom_menu_items) ? settings.custom_menu_items : []
+        customMenuItems.value = Array.isArray(settings.custom_menu_items) ? settings.custom_menu_items : []
+      }
 
-      paymentEnabled.value = paymentConfigResp.data?.enabled ?? false
-      writeCachedBool('payment_enabled_cached', paymentEnabled.value)
+      if (paymentConfigResp) {
+        paymentEnabled.value = paymentConfigResp.data?.enabled ?? false
+        writeCachedBool('payment_enabled_cached', paymentEnabled.value)
+      }
 
       loaded.value = true
     } catch (err) {

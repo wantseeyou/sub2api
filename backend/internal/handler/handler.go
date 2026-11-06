@@ -1,13 +1,14 @@
 package handler
 
 import (
-	"github.com/Wei-Shaw/sub2api/internal/groupview"
 	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
 	"github.com/Wei-Shaw/sub2api/internal/securityaudit"
 )
 
 // AdminHandlers contains all admin-related HTTP handlers
 type AdminHandlers struct {
+	Role                   *admin.AdminRoleHandler          // 后台角色与权限管理。
+	AccountReauthorize     *admin.AccountReauthorizeHandler // 不返回凭证的账号重新授权。
 	Dashboard              *admin.DashboardHandler
 	User                   *admin.UserHandler
 	Group                  *admin.GroupHandler
@@ -48,7 +49,6 @@ type AdminHandlers struct {
 
 // Handlers contains all HTTP handlers
 type Handlers struct {
-	GroupView        *groupview.Handler // 分组只读查看与管理员授权入口。
 	Auth             *AuthHandler
 	User             *UserHandler
 	APIKey           *APIKeyHandler

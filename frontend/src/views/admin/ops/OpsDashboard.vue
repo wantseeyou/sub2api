@@ -98,7 +98,7 @@
 
       <!-- System Logs -->
       <OpsSystemLogTable
-        v-if="opsEnabled && !(loading && !hasLoadedOnce)"
+        v-if="auth.can('ops.sensitive.read') && opsEnabled && !(loading && !hasLoadedOnce)"
         :platform-filter="platform"
         :refresh-token="dashboardRefreshToken"
       />
@@ -156,6 +156,7 @@ import {
   type OpsThroughputTrendResponse,
   type OpsMetricThresholds
 } from '@/api/admin/ops'
+import { useAuthStore } from '@/stores/auth'
 import { useAdminSettingsStore, useAppStore } from '@/stores'
 import OpsDashboardHeader from './components/OpsDashboardHeader.vue'
 import OpsDashboardSkeleton from './components/OpsDashboardSkeleton.vue'
@@ -177,6 +178,7 @@ import OpsAlertRulesCard from './components/OpsAlertRulesCard.vue'
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
+const auth = useAuthStore()
 const adminSettingsStore = useAdminSettingsStore()
 const { t } = useI18n()
 
@@ -451,6 +453,7 @@ function handleThroughputSelectGroup(nextGroupId: number) {
 }
 
 function handleOpenRequestDetails(preset?: OpsRequestDetailsPreset) {
+  if (!auth.can('ops.sensitive.read')) return
   const basePreset: OpsRequestDetailsPreset = {
     title: t('admin.ops.requestDetails.title'),
     kind: 'all',
@@ -466,6 +469,7 @@ function handleOpenRequestDetails(preset?: OpsRequestDetailsPreset) {
 }
 
 function openErrorDetails(kind: 'request' | 'upstream') {
+  if (!auth.can('ops.sensitive.read')) return
   errorDetailsType.value = kind
   // Ensure only one modal visible at a time.
   showRequestDetails.value = false

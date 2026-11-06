@@ -44,7 +44,7 @@
               <span class="text-sm font-medium text-gray-600 dark:text-gray-300">
                 {{ t('admin.settings.gatewayTimezone.detectedTimezone') }}
               </span>
-              <button type="button" class="btn btn-secondary btn-sm" :disabled="busy" @click="refreshDetection(false)">
+              <button v-permission="'settings.execute'" type="button" class="btn btn-secondary btn-sm" :disabled="busy" @click="refreshDetection(false)">
                 {{ operation === 'detect' ? t('admin.settings.gatewayTimezone.detecting') : t('admin.settings.gatewayTimezone.refresh') }}
               </button>
             </div>
@@ -85,10 +85,10 @@
               class="min-w-0 flex-1 sm:max-w-md"
             />
             <div class="flex flex-wrap gap-2">
-              <button type="button" class="btn btn-primary" :disabled="busy || !selectedTimezone || (settings.is_set && !dirty)" @click="saveSelection">
+              <button v-permission="'settings.update'" type="button" class="btn btn-primary" :disabled="busy || !selectedTimezone || (settings.is_set && !dirty)" @click="saveSelection">
                 {{ operation === 'save' ? t('admin.settings.gatewayTimezone.saving') : t('admin.settings.gatewayTimezone.save') }}
               </button>
-              <button type="button" class="btn btn-secondary" :disabled="busy" @click="refreshDetection(true)">
+              <button v-permission="'settings.execute'" type="button" class="btn btn-secondary" :disabled="busy" @click="refreshDetection(true)">
                 {{ operation === 'auto' ? t('admin.settings.gatewayTimezone.detecting') : t('admin.settings.gatewayTimezone.autoSet') }}
               </button>
             </div>

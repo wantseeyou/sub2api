@@ -182,7 +182,7 @@ describe('admin AccountsView lite account list', () => {
 
     expect(listAccounts).toHaveBeenCalledWith(
       1,
-      20,
+      50,
       expect.objectContaining({ lite: '1' }),
       expect.objectContaining({ signal: expect.any(AbortSignal) })
     )
@@ -230,7 +230,7 @@ describe('admin AccountsView lite account list', () => {
 
     expect(listWithEtag).toHaveBeenCalledWith(
       1,
-      20,
+      50,
       expect.objectContaining({ lite: '1' }),
       expect.objectContaining({ etag: null })
     )

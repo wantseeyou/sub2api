@@ -65,10 +65,13 @@ var (
 
 // UserListFilters contains all filter options for listing users
 type UserListFilters struct {
-	Status    string // User status filter
-	Role      string // User role filter
-	Search    string // Search in email, username
-	GroupName string // Filter by allowed group name (fuzzy match)
+	AdminRoleID *int64  // 后台角色过滤；零表示普通用户。
+	IDs         []int64 // 有界用户标识集合，仅供批量权限检查。
+	StaffOnly   bool    // 仅匹配内置管理员或自定义后台成员。
+	Status      string  // User status filter
+	Role        string  // User role filter
+	Search      string  // Search in email, username
+	GroupName   string  // Filter by allowed group name (fuzzy match)
 	// APIKeyGroupID filters users who own at least one non-soft-deleted API key
 	// bound to this group (api_keys.group_id). 0 = no filter. Covers all three
 	// group types since it matches the key's group directly, not allowed_groups.
@@ -100,6 +103,7 @@ type UserUpdateFields struct {
 	Notes        bool
 	PasswordHash bool
 	Role         bool
+	AdminRoleID  bool // 是否更新自定义后台角色关联。
 	Status       bool
 	Concurrency  bool
 	RPMLimit     bool
@@ -1438,4 +1442,17 @@ const notifyVerifyEmailTemplate = `<!DOCTYPE html>
 // buildNotifyVerifyEmailBody builds the HTML email body for notify email verification.
 func buildNotifyVerifyEmailBody(code, siteName string) string {
 	return fmt.Sprintf(notifyVerifyEmailTemplate, siteName, code)
+}
+
+// ValidateOrdinaryUserTargets 通过一次有界查询禁止批量修改后台成员。
+func (s *UserService) ValidateOrdinaryUserTargets(ctx context.Context, ids []int64) error {
+	noSubscriptions := false
+	users, _, err := s.userRepo.ListWithFilters(ctx, pagination.PaginationParams{Page: 1, PageSize: 1}, UserListFilters{IDs: ids, StaffOnly: true, IncludeSubscriptions: &noSubscriptions})
+	if err != nil {
+		return err
+	}
+	if len(users) > 0 {
+		return infraerrors.Forbidden("ROLE_PERMISSION_DENIED", "只有管理员可修改后台成员")
+	}
+	return nil
 }

@@ -49,6 +49,7 @@ vi.mock('@/api/admin', () => ({
   },
 }))
 
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isAdmin: true, canAccessAdmin: true, can: () => true }) }))
 vi.mock('@/stores/app', () => ({
   useAppStore: () => ({
     showError,

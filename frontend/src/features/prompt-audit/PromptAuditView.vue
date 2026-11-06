@@ -103,7 +103,7 @@
             {{ dirty ? t('admin.promptAudit.saveBar.dirty') : t('admin.promptAudit.saveBar.synced') }}
           </span>
           <button type="button" class="btn btn-secondary" :disabled="!dirty || loading.saving" @click="resetDraft">{{ t('common.reset') }}</button>
-          <button type="button" class="btn btn-primary" :disabled="!dirty || loading.saving" data-test="save-config" @click="saveConfig">
+          <button v-permission="'prompt_audit.update'" type="button" class="btn btn-primary" :disabled="!dirty || loading.saving" data-test="save-config" @click="saveConfig">
             {{ loading.saving ? t('common.saving') : t('common.save') }}
           </button>
         </div>
@@ -148,6 +148,7 @@ import { computed, defineComponent, h, onMounted, reactive, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import { useAuthStore } from '@/stores/auth'
 import { useAppStore } from '@/stores/app'
 import { extractApiErrorCode, extractApiErrorMessage } from '@/utils/apiError'
 import RuntimeOverview from './components/RuntimeOverview.vue'
@@ -173,10 +174,11 @@ import { buildUpdateRequest, cloneData, configToDraft, draftFingerprint, emptyEv
 
 const { t, locale } = useI18n()
 const appStore = useAppStore()
+const auth = useAuthStore()
 type PromptAuditPageTab = 'config' | 'events'
-const activeTab = ref<PromptAuditPageTab>('events')
+const activeTab = ref<PromptAuditPageTab>(auth.can('prompt_audit.sensitive.read') ? 'events' : 'config')
 const pageTabs = computed(() => [
-  { id: 'events' as const, label: t('admin.promptAudit.tabs.events') },
+  ...(auth.can('prompt_audit.sensitive.read') ? [{ id: 'events' as const, label: t('admin.promptAudit.tabs.events') }] : []),
   { id: 'config' as const, label: t('admin.promptAudit.tabs.config') },
 ])
 const serverConfig = ref<PromptAuditDraft | null>(null)
@@ -268,11 +270,12 @@ async function loadRuntime() {
 async function loadGroups() {
   loading.groups = true
   loadErrors.groups = ''
-  try { groups.value = await promptAuditAPI.listGroups() }
+  try { groups.value = auth.can('groups.read') ? await promptAuditAPI.listGroups() : [] }
   catch (error) { loadErrors.groups = errorMessage(error, 'admin.promptAudit.errors.loadGroups') }
   finally { loading.groups = false }
 }
 async function loadEvents() {
+  if (!auth.can('prompt_audit.sensitive.read')) return
   loading.events = true
   loadErrors.events = ''
   try {

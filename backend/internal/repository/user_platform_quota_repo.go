@@ -10,6 +10,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/userplatformquota"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/adminaccess"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 )
 
@@ -226,7 +227,20 @@ func (r *userPlatformQuotaRepository) IncrementUsageWithReset(ctx context.Contex
 //
 // 未命中活跃记录时返回 ErrUserPlatformQuotaNotFound。
 func (r *userPlatformQuotaRepository) ResetExpiredWindow(ctx context.Context, userID int64, platform string, window string, newStart time.Time) error {
+	var ownedTx *dbent.Tx
+	if adminaccess.RoleFromContext(ctx) != nil && dbent.TxFromContext(ctx) == nil {
+		tx, err := r.client.Tx(ctx)
+		if err != nil {
+			return err
+		}
+		ownedTx = tx
+		defer func() { _ = tx.Rollback() }()
+		ctx = dbent.NewTxContext(ctx, tx)
+	}
 	client := clientFromContext(ctx, r.client)
+	if err := guardRoleUserMutation(ctx, client, userID); err != nil {
+		return err
+	}
 	upd := client.UserPlatformQuota.Update().
 		Where(
 			userplatformquota.UserIDEQ(userID),
@@ -249,6 +263,9 @@ func (r *userPlatformQuotaRepository) ResetExpiredWindow(ctx context.Context, us
 	}
 	if n == 0 {
 		return ErrUserPlatformQuotaNotFound
+	}
+	if ownedTx != nil {
+		return ownedTx.Commit()
 	}
 	return nil
 }
@@ -326,6 +343,9 @@ func (r *userPlatformQuotaRepository) UpsertForUser(ctx context.Context, userID 
 		return err
 	}
 	return r.withTx(ctx, func(txCtx context.Context, txClient *dbent.Client) error {
+		if err := guardRoleUserMutation(txCtx, txClient, userID); err != nil {
+			return err
+		}
 		platforms := make([]string, 0, len(records))
 		for _, rec := range records {
 			platforms = append(platforms, rec.Platform)

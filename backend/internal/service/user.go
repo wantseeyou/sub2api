@@ -18,6 +18,8 @@ type User struct {
 	AvatarSHA256   string
 	PasswordHash   string
 	Role           string
+	AdminRoleID    *int64     // 自定义后台角色标识，空值表示未分配。
+	AdminRole      *AdminRole // 当前有效的角色配置，由用户查询批量预加载。
 	Balance        float64
 	FrozenBalance  float64
 	Concurrency    int
@@ -70,6 +72,11 @@ type User struct {
 
 func (u *User) IsAdmin() bool {
 	return u.Role == RoleAdmin
+}
+
+// HasAdminAccess 判断用户是否具有后台访问资格，不授予管理员身份。
+func (u *User) HasAdminAccess() bool {
+	return u.IsAdmin() || (u.AdminRole != nil && u.AdminRole.Enabled && len(u.AdminRole.Permissions) > 0)
 }
 
 func (u *User) IsActive() bool {

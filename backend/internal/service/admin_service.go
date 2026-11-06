@@ -160,6 +160,7 @@ func ValidateSimpleModeGroupOperation(cfg *config.Config, operation AdminGroupOp
 
 // CreateUserInput represents input for creating a new user via admin operations.
 type CreateUserInput struct {
+	AdminRoleID          *int64 // 自定义后台角色标识，空值或零表示普通用户。
 	Email                string
 	Password             string
 	Username             string
@@ -175,6 +176,7 @@ type CreateUserInput struct {
 }
 
 type UpdateUserInput struct {
+	AdminRoleID   *int64 // 未提供时保留关联，零表示清除自定义角色。
 	Email         string
 	Password      string
 	Username      *string

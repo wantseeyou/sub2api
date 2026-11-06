@@ -27,6 +27,8 @@ const (
 	FieldPasswordHash = "password_hash"
 	// FieldRole holds the string denoting the role field in the database.
 	FieldRole = "role"
+	// FieldAdminRoleID holds the string denoting the admin_role_id field in the database.
+	FieldAdminRoleID = "admin_role_id"
 	// FieldBalance holds the string denoting the balance field in the database.
 	FieldBalance = "balance"
 	// FieldFrozenBalance holds the string denoting the frozen_balance field in the database.
@@ -65,6 +67,8 @@ const (
 	FieldTotalRecharged = "total_recharged"
 	// FieldRpmLimit holds the string denoting the rpm_limit field in the database.
 	FieldRpmLimit = "rpm_limit"
+	// EdgeAdminRole holds the string denoting the admin_role edge name in mutations.
+	EdgeAdminRole = "admin_role"
 	// EdgeAPIKeys holds the string denoting the api_keys edge name in mutations.
 	EdgeAPIKeys = "api_keys"
 	// EdgeRedeemCodes holds the string denoting the redeem_codes edge name in mutations.
@@ -95,6 +99,13 @@ const (
 	EdgeUserAllowedGroups = "user_allowed_groups"
 	// Table holds the table name of the user in the database.
 	Table = "users"
+	// AdminRoleTable is the table that holds the admin_role relation/edge.
+	AdminRoleTable = "users"
+	// AdminRoleInverseTable is the table name for the AdminRole entity.
+	// It exists in this package in order to avoid circular dependency with the "adminrole" package.
+	AdminRoleInverseTable = "admin_roles"
+	// AdminRoleColumn is the table column denoting the admin_role relation/edge.
+	AdminRoleColumn = "admin_role_id"
 	// APIKeysTable is the table that holds the api_keys relation/edge.
 	APIKeysTable = "api_keys"
 	// APIKeysInverseTable is the table name for the APIKey entity.
@@ -202,6 +213,7 @@ var Columns = []string{
 	FieldEmail,
 	FieldPasswordHash,
 	FieldRole,
+	FieldAdminRoleID,
 	FieldBalance,
 	FieldFrozenBalance,
 	FieldConcurrency,
@@ -335,6 +347,11 @@ func ByRole(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRole, opts...).ToFunc()
 }
 
+// ByAdminRoleID orders the results by the admin_role_id field.
+func ByAdminRoleID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldAdminRoleID, opts...).ToFunc()
+}
+
 // ByBalance orders the results by the balance field.
 func ByBalance(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldBalance, opts...).ToFunc()
@@ -428,6 +445,13 @@ func ByTotalRecharged(opts ...sql.OrderTermOption) OrderOption {
 // ByRpmLimit orders the results by the rpm_limit field.
 func ByRpmLimit(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldRpmLimit, opts...).ToFunc()
+}
+
+// ByAdminRoleField orders the results by admin_role field.
+func ByAdminRoleField(field string, opts ...sql.OrderTermOption) OrderOption {
+	return func(s *sql.Selector) {
+		sqlgraph.OrderByNeighborTerms(s, newAdminRoleStep(), sql.OrderByField(field, opts...))
+	}
 }
 
 // ByAPIKeysCount orders the results by api_keys count.
@@ -624,6 +648,13 @@ func ByUserAllowedGroups(term sql.OrderTerm, terms ...sql.OrderTerm) OrderOption
 	return func(s *sql.Selector) {
 		sqlgraph.OrderByNeighborTerms(s, newUserAllowedGroupsStep(), append([]sql.OrderTerm{term}, terms...)...)
 	}
+}
+func newAdminRoleStep() *sqlgraph.Step {
+	return sqlgraph.NewStep(
+		sqlgraph.From(Table, FieldID),
+		sqlgraph.To(AdminRoleInverseTable, FieldID),
+		sqlgraph.Edge(sqlgraph.M2O, true, AdminRoleTable, AdminRoleColumn),
+	)
 }
 func newAPIKeysStep() *sqlgraph.Step {
 	return sqlgraph.NewStep(

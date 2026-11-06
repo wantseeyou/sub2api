@@ -73,7 +73,7 @@
               <button type="button" class="btn btn-secondary" :disabled="loading" @click="resetFilters">
                 {{ t('common.reset') }}
               </button>
-              <button type="button" class="btn btn-danger" @click="openClearDialog">
+              <button v-permission="'audit_logs.execute'" type="button" class="btn btn-danger" @click="openClearDialog">
                 <Icon name="trash" size="sm" class="mr-1.5" />
                 {{ t('admin.audit.clearAll') }}
               </button>
@@ -338,7 +338,7 @@
         <button type="button" class="btn btn-secondary" :disabled="clearing" @click="cancelClearTotp">
           {{ t('common.cancel') }}
         </button>
-        <button
+        <button v-permission="'audit_logs.execute'"
           type="button"
           class="btn btn-danger"
           :disabled="clearing || clearTotpCode.length !== 6"

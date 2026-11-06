@@ -18,7 +18,7 @@ func BackendModeUserGuard(settingService *service.SettingService) gin.HandlerFun
 			return
 		}
 		role, _ := GetUserRoleFromContext(c)
-		if role == "admin" {
+		if role == "admin" || (c.GetBool("has_admin_access") && backendRoleSelfServicePath(c.FullPath())) {
 			c.Next()
 			return
 		}
@@ -90,4 +90,11 @@ func BackendModeAuthGuard(settingService *service.SettingService) gin.HandlerFun
 		response.Forbidden(c, "Backend mode is active. Registration and self-service auth flows are disabled.")
 		c.Abort()
 	}
+}
+
+// backendRoleSelfServicePath 允许后台角色维护自己的登录凭据与二次验证。
+func backendRoleSelfServicePath(path string) bool {
+	return path == "/api/v1/user/profile" || path == "/api/v1/user/password" || path == "/api/v1/user" ||
+		strings.HasPrefix(path, "/api/v1/user/totp/") || strings.HasPrefix(path, "/api/v1/user/step-up/") ||
+		strings.HasPrefix(path, "/api/v1/user/passkeys")
 }

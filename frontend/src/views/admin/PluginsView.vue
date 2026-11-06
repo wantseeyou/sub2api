@@ -31,7 +31,7 @@
             accept=".s2plugin,application/zip"
             @change="handleFileSelected"
           />
-          <button
+          <button v-permission="'plugins.execute'"
             type="button"
             class="btn btn-primary"
             :disabled="uploading"
@@ -121,7 +121,7 @@
                 {{ plugin.description }}
               </p>
             </div>
-            <button
+            <button v-permission="'plugins.sensitive.read'"
               type="button"
               class="btn btn-secondary btn-sm"
               @click="openConfiguration(plugin)"
@@ -238,7 +238,7 @@
           <div
             class="flex flex-wrap justify-end gap-2 border-t border-gray-100 px-5 py-4 dark:border-dark-700"
           >
-            <button
+            <button v-permission="'plugins.execute'"
               type="button"
               class="btn btn-secondary btn-sm"
               :disabled="busyID === plugin.id"
@@ -247,7 +247,7 @@
               <Icon name="beaker" size="sm" />
               {{ t("admin.plugins.test") }}
             </button>
-            <button
+            <button v-permission="'plugins.execute'"
               v-if="hasEnabledBinding(plugin)"
               type="button"
               class="btn btn-secondary btn-sm"
@@ -257,7 +257,7 @@
               <Icon name="ban" size="sm" />
               {{ t("admin.plugins.disable") }}
             </button>
-            <button
+            <button v-permission="'plugins.execute'"
               v-else
               type="button"
               class="btn btn-primary btn-sm"
@@ -271,7 +271,7 @@
               <Icon name="play" size="sm" />
               {{ t("admin.plugins.enable") }}
             </button>
-            <button
+            <button v-permission="'plugins.delete'"
               type="button"
               class="btn btn-danger btn-sm"
               :disabled="busyID === plugin.id || hasEnabledBinding(plugin)"

@@ -96,6 +96,13 @@ export const useAuthStore = defineStore('auth', () => {
     return user.value?.role === 'admin'
   })
 
+  const canAccessAdmin = computed(() => isAdmin.value || Boolean(user.value?.admin_role?.enabled))
+
+  // can 判断当前用户是否具有指定后台操作权限。
+  function can(permission: string): boolean {
+    return isAdmin.value || Boolean(user.value?.admin_role?.enabled && user.value.admin_role.permissions.includes(permission))
+  }
+
   const isSimpleMode = computed(() => runMode.value === 'simple')
   const hasPendingAuthSession = computed(() => pendingAuthSession.value !== null)
 
@@ -498,6 +505,8 @@ export const useAuthStore = defineStore('auth', () => {
     // Computed
     isAuthenticated,
     isAdmin,
+    canAccessAdmin,
+    can,
     isSimpleMode,
     hasPendingAuthSession,
 

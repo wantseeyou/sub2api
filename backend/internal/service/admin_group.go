@@ -11,6 +11,7 @@ import (
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/adminaccess"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -1369,6 +1370,27 @@ func (s *adminServiceImpl) AdminUpdateAPIKeyGroupID(ctx context.Context, keyID i
 		return nil, infraerrors.BadRequest("INVALID_GROUP_ID", "group_id must be non-negative")
 	}
 
+	opCtx := ctx
+	tx := dbent.TxFromContext(ctx)
+	ownedTx := false
+	if adminaccess.RoleFromContext(ctx) != nil {
+		if tx == nil {
+			if s.entClient == nil {
+				return nil, infraerrors.InternalServer("API_KEY_MUTATION_UNAVAILABLE", "API key mutation transaction is unavailable")
+			}
+			tx, err = s.entClient.Tx(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("begin transaction: %w", err)
+			}
+			ownedTx = true
+			defer func() { _ = tx.Rollback() }()
+			opCtx = dbent.NewTxContext(ctx, tx)
+		}
+		if err := LockRoleUserMutationTarget(opCtx, tx.Client(), apiKey.UserID); err != nil {
+			return nil, err
+		}
+	}
+
 	result := &AdminUpdateAPIKeyGroupIDResult{}
 
 	if *groupID == 0 {
@@ -1377,7 +1399,7 @@ func (s *adminServiceImpl) AdminUpdateAPIKeyGroupID(ctx context.Context, keyID i
 		apiKey.Group = nil
 	} else {
 		// 验证目标分组存在且状态为 active
-		group, err := s.groupRepo.GetByID(ctx, *groupID)
+		group, err := s.groupRepo.GetByID(opCtx, *groupID)
 		if err != nil {
 			return nil, err
 		}
@@ -1389,7 +1411,7 @@ func (s *adminServiceImpl) AdminUpdateAPIKeyGroupID(ctx context.Context, keyID i
 			if s.userSubRepo == nil {
 				return nil, infraerrors.InternalServer("SUBSCRIPTION_REPOSITORY_UNAVAILABLE", "subscription repository is not configured")
 			}
-			if _, err := s.userSubRepo.GetActiveByUserIDAndGroupID(ctx, apiKey.UserID, *groupID); err != nil {
+			if _, err := s.userSubRepo.GetActiveByUserIDAndGroupID(opCtx, apiKey.UserID, *groupID); err != nil {
 				if errors.Is(err, ErrSubscriptionNotFound) {
 					return nil, infraerrors.BadRequest("SUBSCRIPTION_REQUIRED", "user does not have an active subscription for this group")
 				}
@@ -1403,65 +1425,74 @@ func (s *adminServiceImpl) AdminUpdateAPIKeyGroupID(ctx context.Context, keyID i
 
 		// 专属标准分组：使用事务保证「添加分组权限」与「更新 API Key」的原子性
 		if group.IsExclusive && !group.IsSubscriptionType() {
-			opCtx := ctx
-			var tx *dbent.Tx
-			if s.entClient == nil {
-				logger.LegacyPrintf("service.admin", "Warning: entClient is nil, skipping transaction protection for exclusive group binding")
-			} else {
-				var txErr error
-				tx, txErr = s.entClient.Tx(ctx)
-				if txErr != nil {
-					return nil, fmt.Errorf("begin transaction: %w", txErr)
+			if tx == nil {
+				if s.entClient == nil {
+					logger.LegacyPrintf("service.admin", "Warning: entClient is nil, skipping transaction protection for exclusive group binding")
+				} else {
+					tx, err = s.entClient.Tx(ctx)
+					if err != nil {
+						return nil, fmt.Errorf("begin transaction: %w", err)
+					}
+					ownedTx = true
+					defer func() { _ = tx.Rollback() }()
+					opCtx = dbent.NewTxContext(ctx, tx)
 				}
-				defer func() { _ = tx.Rollback() }()
-				opCtx = dbent.NewTxContext(ctx, tx)
 			}
 
 			if addErr := s.userRepo.AddGroupToAllowedGroups(opCtx, apiKey.UserID, gid); addErr != nil {
 				return nil, fmt.Errorf("add group to user allowed groups: %w", addErr)
 			}
-			if err := s.apiKeyRepo.Update(opCtx, apiKey, APIKeyUpdateFields{GroupID: true}); err != nil {
-				return nil, fmt.Errorf("update api key: %w", err)
-			}
-			if tx != nil {
-				if err := tx.Commit(); err != nil {
-					return nil, fmt.Errorf("commit transaction: %w", err)
-				}
-			}
-
 			result.AutoGrantedGroupAccess = true
 			result.GrantedGroupID = &gid
 			result.GrantedGroupName = group.Name
-
-			// 失效认证缓存（在事务提交后执行）
-			if s.authCacheInvalidator != nil {
-				s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, apiKey.Key)
-			}
-
-			result.APIKey = apiKey
-			return result, nil
 		}
 	}
 
-	// 非专属分组 / 解绑：无需事务，单步更新即可
-	if err := s.apiKeyRepo.Update(ctx, apiKey, APIKeyUpdateFields{GroupID: true}); err != nil {
+	if err := s.apiKeyRepo.Update(opCtx, apiKey, APIKeyUpdateFields{GroupID: true}); err != nil {
 		return nil, fmt.Errorf("update api key: %w", err)
 	}
+	if ownedTx {
+		if err := tx.Commit(); err != nil {
+			return nil, fmt.Errorf("commit transaction: %w", err)
+		}
+	}
 
-	// 失效认证缓存
+	// 失效认证缓存，复用外层事务时等待其提交。
 	if s.authCacheInvalidator != nil {
-		s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, apiKey.Key)
+		AfterAccountCommit(ctx, func(commitCtx context.Context) {
+			s.authCacheInvalidator.InvalidateAuthCacheByKey(commitCtx, apiKey.Key)
+		})
 	}
 
 	result.APIKey = apiKey
 	return result, nil
 }
 
-// AdminResetAPIKeyRateLimitUsage resets all API key rate-limit usage windows.
+// AdminResetAPIKeyRateLimitUsage 重置 API Key 的所有限流用量窗口。
 func (s *adminServiceImpl) AdminResetAPIKeyRateLimitUsage(ctx context.Context, keyID int64) (*APIKey, error) {
 	apiKey, err := s.apiKeyRepo.GetByID(ctx, keyID)
 	if err != nil {
 		return nil, err
+	}
+	opCtx := ctx
+	tx := dbent.TxFromContext(ctx)
+	ownedTx := false
+	if adminaccess.RoleFromContext(ctx) != nil {
+		if tx == nil {
+			if s.entClient == nil {
+				return nil, infraerrors.InternalServer("API_KEY_MUTATION_UNAVAILABLE", "API key mutation transaction is unavailable")
+			}
+			tx, err = s.entClient.Tx(ctx)
+			if err != nil {
+				return nil, fmt.Errorf("begin transaction: %w", err)
+			}
+			ownedTx = true
+			defer func() { _ = tx.Rollback() }()
+			opCtx = dbent.NewTxContext(ctx, tx)
+		}
+		if err := LockRoleUserMutationTarget(opCtx, tx.Client(), apiKey.UserID); err != nil {
+			return nil, err
+		}
 	}
 	apiKey.Usage5h = 0
 	apiKey.Usage1d = 0
@@ -1469,15 +1500,22 @@ func (s *adminServiceImpl) AdminResetAPIKeyRateLimitUsage(ctx context.Context, k
 	apiKey.Window5hStart = nil
 	apiKey.Window1dStart = nil
 	apiKey.Window7dStart = nil
-	if err := s.apiKeyRepo.Update(ctx, apiKey, APIKeyUpdateFields{RateLimitUsage: true}); err != nil {
+	if err := s.apiKeyRepo.Update(opCtx, apiKey, APIKeyUpdateFields{RateLimitUsage: true}); err != nil {
 		return nil, fmt.Errorf("reset api key rate limit usage: %w", err)
 	}
-	if s.authCacheInvalidator != nil {
-		s.authCacheInvalidator.InvalidateAuthCacheByKey(ctx, apiKey.Key)
+	if ownedTx {
+		if err := tx.Commit(); err != nil {
+			return nil, fmt.Errorf("commit transaction: %w", err)
+		}
 	}
-	if s.billingCacheService != nil {
-		_ = s.billingCacheService.InvalidateAPIKeyRateLimit(ctx, apiKey.ID)
-	}
+	AfterAccountCommit(ctx, func(commitCtx context.Context) {
+		if s.authCacheInvalidator != nil {
+			s.authCacheInvalidator.InvalidateAuthCacheByKey(commitCtx, apiKey.Key)
+		}
+		if s.billingCacheService != nil {
+			_ = s.billingCacheService.InvalidateAPIKeyRateLimit(commitCtx, apiKey.ID)
+		}
+	})
 	return apiKey, nil
 }
 
@@ -1513,6 +1551,9 @@ func (s *adminServiceImpl) ReplaceUserGroup(ctx context.Context, userID, oldGrou
 	defer func() { _ = tx.Rollback() }()
 	opCtx := dbent.NewTxContext(ctx, tx)
 
+	if err := LockRoleUserMutationTarget(opCtx, tx.Client(), userID); err != nil {
+		return nil, err
+	}
 	// 1. 授予新分组权限
 	if err := s.userRepo.AddGroupToAllowedGroups(opCtx, userID, newGroupID); err != nil {
 		return nil, fmt.Errorf("add new group to allowed groups: %w", err)

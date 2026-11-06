@@ -11,6 +11,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"entgo.io/ent/schema/field"
+	"github.com/Wei-Shaw/sub2api/ent/adminrole"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
 	"github.com/Wei-Shaw/sub2api/ent/authidentity"
@@ -98,6 +99,20 @@ func (_c *UserCreate) SetRole(v string) *UserCreate {
 func (_c *UserCreate) SetNillableRole(v *string) *UserCreate {
 	if v != nil {
 		_c.SetRole(*v)
+	}
+	return _c
+}
+
+// SetAdminRoleID sets the "admin_role_id" field.
+func (_c *UserCreate) SetAdminRoleID(v int64) *UserCreate {
+	_c.mutation.SetAdminRoleID(v)
+	return _c
+}
+
+// SetNillableAdminRoleID sets the "admin_role_id" field if the given value is not nil.
+func (_c *UserCreate) SetNillableAdminRoleID(v *int64) *UserCreate {
+	if v != nil {
+		_c.SetAdminRoleID(*v)
 	}
 	return _c
 }
@@ -366,6 +381,11 @@ func (_c *UserCreate) SetNillableRpmLimit(v *int) *UserCreate {
 		_c.SetRpmLimit(*v)
 	}
 	return _c
+}
+
+// SetAdminRole sets the "admin_role" edge to the AdminRole entity.
+func (_c *UserCreate) SetAdminRole(v *AdminRole) *UserCreate {
+	return _c.SetAdminRoleID(v.ID)
 }
 
 // AddAPIKeyIDs adds the "api_keys" edge to the APIKey entity by IDs.
@@ -893,6 +913,23 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		_spec.SetField(user.FieldRpmLimit, field.TypeInt, value)
 		_node.RpmLimit = value
 	}
+	if nodes := _c.mutation.AdminRoleIDs(); len(nodes) > 0 {
+		edge := &sqlgraph.EdgeSpec{
+			Rel:     sqlgraph.M2O,
+			Inverse: true,
+			Table:   user.AdminRoleTable,
+			Columns: []string{user.AdminRoleColumn},
+			Bidi:    false,
+			Target: &sqlgraph.EdgeTarget{
+				IDSpec: sqlgraph.NewFieldSpec(adminrole.FieldID, field.TypeInt64),
+			},
+		}
+		for _, k := range nodes {
+			edge.Target.Nodes = append(edge.Target.Nodes, k)
+		}
+		_node.AdminRoleID = &nodes[0]
+		_spec.Edges = append(_spec.Edges, edge)
+	}
 	if nodes := _c.mutation.APIKeysIDs(); len(nodes) > 0 {
 		edge := &sqlgraph.EdgeSpec{
 			Rel:     sqlgraph.O2M,
@@ -1220,6 +1257,24 @@ func (u *UserUpsert) SetRole(v string) *UserUpsert {
 // UpdateRole sets the "role" field to the value that was provided on create.
 func (u *UserUpsert) UpdateRole() *UserUpsert {
 	u.SetExcluded(user.FieldRole)
+	return u
+}
+
+// SetAdminRoleID sets the "admin_role_id" field.
+func (u *UserUpsert) SetAdminRoleID(v int64) *UserUpsert {
+	u.Set(user.FieldAdminRoleID, v)
+	return u
+}
+
+// UpdateAdminRoleID sets the "admin_role_id" field to the value that was provided on create.
+func (u *UserUpsert) UpdateAdminRoleID() *UserUpsert {
+	u.SetExcluded(user.FieldAdminRoleID)
+	return u
+}
+
+// ClearAdminRoleID clears the value of the "admin_role_id" field.
+func (u *UserUpsert) ClearAdminRoleID() *UserUpsert {
+	u.SetNull(user.FieldAdminRoleID)
 	return u
 }
 
@@ -1636,6 +1691,27 @@ func (u *UserUpsertOne) SetRole(v string) *UserUpsertOne {
 func (u *UserUpsertOne) UpdateRole() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateRole()
+	})
+}
+
+// SetAdminRoleID sets the "admin_role_id" field.
+func (u *UserUpsertOne) SetAdminRoleID(v int64) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetAdminRoleID(v)
+	})
+}
+
+// UpdateAdminRoleID sets the "admin_role_id" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateAdminRoleID() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateAdminRoleID()
+	})
+}
+
+// ClearAdminRoleID clears the value of the "admin_role_id" field.
+func (u *UserUpsertOne) ClearAdminRoleID() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearAdminRoleID()
 	})
 }
 
@@ -2267,6 +2343,27 @@ func (u *UserUpsertBulk) SetRole(v string) *UserUpsertBulk {
 func (u *UserUpsertBulk) UpdateRole() *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateRole()
+	})
+}
+
+// SetAdminRoleID sets the "admin_role_id" field.
+func (u *UserUpsertBulk) SetAdminRoleID(v int64) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetAdminRoleID(v)
+	})
+}
+
+// UpdateAdminRoleID sets the "admin_role_id" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateAdminRoleID() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateAdminRoleID()
+	})
+}
+
+// ClearAdminRoleID clears the value of the "admin_role_id" field.
+func (u *UserUpsertBulk) ClearAdminRoleID() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearAdminRoleID()
 	})
 }
 

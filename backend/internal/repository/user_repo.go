@@ -140,12 +140,16 @@ func (r *userRepository) create(ctx context.Context, userIn *service.User, guard
 		}
 	}
 
+	if err := resolveUserAdminRole(txCtx, txClient, userIn); err != nil {
+		return err
+	}
 	created, err := txClient.User.Create().
 		SetEmail(userIn.Email).
 		SetUsername(userIn.Username).
 		SetNotes(userIn.Notes).
 		SetPasswordHash(userIn.PasswordHash).
 		SetRole(userIn.Role).
+		SetNillableAdminRoleID(userIn.AdminRoleID).
 		SetBalance(userIn.Balance).
 		SetConcurrency(userIn.Concurrency).
 		SetStatus(userIn.Status).
@@ -177,7 +181,7 @@ func (r *userRepository) create(ctx context.Context, userIn *service.User, guard
 }
 
 func (r *userRepository) GetByID(ctx context.Context, id int64) (*service.User, error) {
-	m, err := r.client.User.Query().Where(dbuser.IDEQ(id)).Only(ctx)
+	m, err := r.client.User.Query().WithAdminRole().Where(dbuser.IDEQ(id)).Only(ctx)
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrUserNotFound, nil)
 	}
@@ -195,7 +199,7 @@ func (r *userRepository) GetByID(ctx context.Context, id int64) (*service.User, 
 
 func (r *userRepository) GetByIDIncludeDeleted(ctx context.Context, id int64) (*service.User, error) {
 	ctx = mixins.SkipSoftDelete(ctx)
-	m, err := r.client.User.Query().Where(dbuser.IDEQ(id)).Only(ctx)
+	m, err := r.client.User.Query().WithAdminRole().Where(dbuser.IDEQ(id)).Only(ctx)
 	if err != nil {
 		return nil, translatePersistenceError(err, service.ErrUserNotFound, nil)
 	}
@@ -211,7 +215,7 @@ func (r *userRepository) GetByIDIncludeDeleted(ctx context.Context, id int64) (*
 }
 
 func (r *userRepository) GetByEmail(ctx context.Context, email string) (*service.User, error) {
-	matches, err := r.client.User.Query().
+	matches, err := r.client.User.Query().WithAdminRole().
 		Where(userEmailLookupPredicate(email)).
 		Order(dbent.Asc(dbuser.FieldID)).
 		All(ctx)
@@ -286,6 +290,9 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User, field
 		}
 	}
 
+	if err := guardRoleUserMutation(txCtx, txClient, userIn.ID); err != nil {
+		return err
+	}
 	existing, err := clientFromContext(txCtx, txClient).User.Get(txCtx, userIn.ID)
 	if err != nil {
 		return translatePersistenceError(err, service.ErrUserNotFound, nil)
@@ -307,6 +314,16 @@ func (r *userRepository) Update(ctx context.Context, userIn *service.User, field
 	}
 	if fields.Role {
 		updateOp = updateOp.SetRole(userIn.Role)
+	}
+	if fields.AdminRoleID {
+		if err := resolveUserAdminRole(txCtx, txClient, userIn); err != nil {
+			return err
+		}
+		if userIn.AdminRoleID == nil {
+			updateOp = updateOp.ClearAdminRoleID()
+		} else {
+			updateOp = updateOp.SetAdminRoleID(*userIn.AdminRoleID)
+		}
 	}
 	if fields.Concurrency {
 		updateOp = updateOp.SetConcurrency(userIn.Concurrency)
@@ -484,6 +501,9 @@ func (r *userRepository) Delete(ctx context.Context, id int64) error {
 
 // deleteUser 在给定 client（可能是外部事务 client）上删除用户及其身份关联记录，自身不开启/提交事务。
 func (r *userRepository) deleteUser(ctx context.Context, exec *dbent.Client, id int64) error {
+	if err := guardRoleUserMutation(ctx, exec, id); err != nil {
+		return err
+	}
 	identityIDs, err := exec.AuthIdentity.Query().
 		Where(authidentity.UserIDEQ(id)).
 		IDs(ctx)
@@ -530,7 +550,20 @@ func (r *userRepository) ListWithFilters(ctx context.Context, params pagination.
 		userCtx = mixins.SkipSoftDelete(ctx)
 	}
 
-	q := r.client.User.Query()
+	q := r.client.User.Query().WithAdminRole()
+	if len(filters.IDs) > 0 {
+		q.Where(dbuser.IDIn(filters.IDs...))
+	}
+	if filters.StaffOnly {
+		q.Where(dbuser.Or(dbuser.RoleEQ(service.RoleAdmin), dbuser.AdminRoleIDNotNil()))
+	}
+	if filters.AdminRoleID != nil {
+		if *filters.AdminRoleID == 0 {
+			q.Where(dbuser.AdminRoleIDIsNil(), dbuser.RoleEQ(service.RoleUser))
+		} else {
+			q.Where(dbuser.AdminRoleIDEQ(*filters.AdminRoleID))
+		}
+	}
 
 	if filters.Status != "" {
 		q = q.Where(dbuser.StatusEQ(filters.Status))
@@ -941,12 +974,12 @@ func (r *userRepository) DeductAvailableBalance(ctx context.Context, id int64, a
 // 相比"读余额 → 算新值 → 整行写回"，这里把读与写压进同一条 UPDATE，
 // 并发的计费扣款不会被旧快照覆盖。
 func (r *userRepository) AdjustBalance(ctx context.Context, id int64, delta float64) (service.BalanceChange, error) {
-	const updateSQL = `
+	updateSQL := fmt.Sprintf(`
 		UPDATE users
 		SET balance = balance + $1, updated_at = NOW()
-		WHERE id = $2 AND deleted_at IS NULL AND balance + $1 >= 0
+		WHERE id = $2 AND deleted_at IS NULL AND balance + $1 >= 0%s
 		RETURNING balance - $1, balance
-	`
+	`, roleUserMutationSQLClause(ctx, ""))
 	change, ok, err := scanBalanceChange(ctx, clientFromContext(ctx, r.client), updateSQL, delta, id)
 	if err != nil {
 		return service.BalanceChange{}, err
@@ -973,13 +1006,13 @@ func (r *userRepository) SetBalance(ctx context.Context, id int64, value float64
 		}
 		return service.BalanceChange{Old: current, New: value}, service.ErrBalanceNegative
 	}
-	const updateSQL = `
+	updateSQL := fmt.Sprintf(`
 		UPDATE users AS u
 		SET balance = $1, updated_at = NOW()
 		FROM (SELECT id, balance FROM users WHERE id = $2 AND deleted_at IS NULL) AS prev
-		WHERE u.id = prev.id AND u.deleted_at IS NULL
+		WHERE u.id = prev.id AND u.deleted_at IS NULL%s
 		RETURNING prev.balance, u.balance
-	`
+	`, roleUserMutationSQLClause(ctx, "u."))
 	change, ok, err := scanBalanceChange(ctx, clientFromContext(ctx, r.client), updateSQL, value, id)
 	if err != nil {
 		return service.BalanceChange{}, err
@@ -1078,7 +1111,7 @@ func (r *userRepository) BatchSetConcurrency(ctx context.Context, userIDs []int6
 		value = 0
 	}
 	res, err := r.sql.ExecContext(ctx,
-		"UPDATE users SET concurrency = $1, updated_at = NOW() WHERE id = ANY($2) AND deleted_at IS NULL",
+		"UPDATE users SET concurrency = $1, updated_at = NOW() WHERE id = ANY($2) AND deleted_at IS NULL"+roleUserMutationSQLClause(ctx, ""),
 		value, pq.Array(userIDs))
 	if err != nil {
 		return 0, fmt.Errorf("batch set concurrency: %w", err)
@@ -1092,7 +1125,7 @@ func (r *userRepository) BatchAddConcurrency(ctx context.Context, userIDs []int6
 		return 0, nil
 	}
 	res, err := r.sql.ExecContext(ctx,
-		"UPDATE users SET concurrency = GREATEST(concurrency + $1, 0), updated_at = NOW() WHERE id = ANY($2) AND deleted_at IS NULL",
+		"UPDATE users SET concurrency = GREATEST(concurrency + $1, 0), updated_at = NOW() WHERE id = ANY($2) AND deleted_at IS NULL"+roleUserMutationSQLClause(ctx, ""),
 		delta, pq.Array(userIDs))
 	if err != nil {
 		return 0, fmt.Errorf("batch add concurrency: %w", err)
@@ -1126,7 +1159,7 @@ func (r *userRepository) BatchUpdateLimits(ctx context.Context, userIDs []int64,
 		strings.Join(setClauses, ", "),
 		len(args),
 	)
-	res, err := r.sql.ExecContext(ctx, query, args...)
+	res, err := r.sql.ExecContext(ctx, query+roleUserMutationSQLClause(ctx, ""), args...)
 	if err != nil {
 		return 0, fmt.Errorf("batch update user limits: %w", err)
 	}

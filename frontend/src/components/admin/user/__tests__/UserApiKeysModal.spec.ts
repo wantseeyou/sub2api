@@ -1,3 +1,4 @@
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isAdmin: true, can: () => true }) }))
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import UserApiKeysModal from '../UserApiKeysModal.vue'

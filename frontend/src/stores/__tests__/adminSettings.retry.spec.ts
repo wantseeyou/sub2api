@@ -4,6 +4,7 @@ import { useAdminSettingsStore } from '../adminSettings'
 
 const mocks = vi.hoisted(() => ({ getSettings: vi.fn(), getConfig: vi.fn() }))
 vi.mock('@/api', () => ({ adminAPI: { settings: { getSettings: mocks.getSettings }, payment: { getConfig: mocks.getConfig } } }))
+vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ can: () => true }) }))
 beforeEach(() => {
   vi.clearAllMocks()
   localStorage.clear()

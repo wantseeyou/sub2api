@@ -13,11 +13,11 @@
     >
       <div>
         <label class="input-label">{{ t('common.name') }}</label>
-        <input v-model="form.name" type="text" required class="input" data-tour="edit-account-form-name" />
+        <input :disabled="!auth.can('accounts.update')" v-permission.disable="'accounts.update'" v-model="form.name" type="text" required class="input" data-tour="edit-account-form-name" />
       </div>
       <div>
         <label class="input-label">{{ t('admin.accounts.notes') }}</label>
-        <textarea
+        <textarea :disabled="!auth.can('accounts.update')" v-permission.disable="'accounts.update'"
           v-model="form.notes"
           rows="3"
           class="input"
@@ -30,7 +30,7 @@
       <div v-if="account.type === 'apikey'" class="space-y-4">
         <div v-if="!isCNApiKeyAccount || editApiProtocol !== 'adaptive'">
           <label class="input-label">{{ t('admin.accounts.baseUrl') }}</label>
-          <input
+          <input :disabled="!auth.can('accounts.network')" v-permission.disable="'accounts.network'"
             v-model="editBaseUrl"
             type="text"
             class="input"
@@ -47,12 +47,12 @@
             "
           />
           <p v-if="baseUrlHint" class="input-hint">{{ baseUrlHint }}</p>
-          <GrokBaseUrlPresets
+          <GrokBaseUrlPresets v-permission.disable="'accounts.network'"
             v-if="account.platform === 'grok'"
             class="mt-2"
             @select="editBaseUrl = $event"
           />
-          <CnBaseUrlPresets
+          <CnBaseUrlPresets v-permission.disable="'accounts.network'"
             v-if="isCNApiKeyAccount && isCNProviderPlatform(account.platform)"
             class="mt-2"
             :platform="cnPresetPlatform"
@@ -69,7 +69,7 @@
               <label class="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-400">
                 {{ t(`admin.accounts.cnProviders.apiProtocol.${item.labelKey}`) }}
               </label>
-              <input v-model="editAdaptiveBaseUrls[item.value]" type="text" class="input" />
+              <input :disabled="!auth.can('accounts.network')" v-permission.disable="'accounts.network'" v-model="editAdaptiveBaseUrls[item.value]" type="text" class="input" />
             </div>
           </div>
           <p v-if="!cnSupportsNativeResponses(account.platform, currentOpenCodeOrCNMode())" class="input-hint">
@@ -80,7 +80,7 @@
         <div v-if="isCNApiKeyAccount && account.platform === 'opencode_go'">
           <label class="input-label">{{ t('admin.accounts.cnProviders.accountMode.title') }}</label>
           <div class="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <button
+            <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               type="button"
               @click="editOpenCodeAccountMode = 'zen'"
               :class="[
@@ -103,7 +103,7 @@
                 <span class="text-xs text-gray-500 dark:text-gray-400">{{ t('admin.accounts.opencodeGo.accountMode.zenDesc') }}</span>
               </div>
             </button>
-            <button
+            <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               type="button"
               @click="editOpenCodeAccountMode = 'go'"
               :class="[
@@ -132,7 +132,7 @@
         <div v-if="isGenericMultiProtocolAccount && genericAccountModes.length > 1" data-testid="edit-generic-account-mode">
           <label class="input-label">{{ t('admin.accounts.cnProviders.accountMode.title') }}</label>
           <div class="mt-2 flex flex-wrap gap-2">
-            <button
+            <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               v-for="mode in genericAccountModes"
               :key="mode"
               type="button"
@@ -152,7 +152,7 @@
         <div v-if="isCNApiKeyAccount && isCNProviderPlatform(account.platform)">
           <label class="input-label">{{ t('admin.accounts.cnProviders.accountMode.title') }}</label>
           <div class="mt-2 flex flex-wrap gap-2">
-            <button
+            <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               v-for="opt in cnAccountModeOptions"
               :key="opt.value"
               type="button"
@@ -173,7 +173,7 @@
         <div v-if="isCNApiKeyAccount">
           <label class="input-label">{{ t('admin.accounts.cnProviders.apiProtocol.title') }}</label>
           <div class="mt-2 flex flex-wrap gap-2">
-            <button
+            <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               v-for="opt in cnProtocolOptions"
               :key="opt.value"
               type="button"
@@ -190,7 +190,7 @@
           </div>
           <p class="input-hint">{{ t(`admin.accounts.cnProviders.apiProtocol.${cnProtocolDescKey}Desc`) }}</p>
         </div>
-        <OpenCodeGoProtocolRulesEditor
+        <OpenCodeGoProtocolRulesEditor v-permission.disable="'accounts.network'"
           v-if="isCNApiKeyAccount && providerRoutesByModel(account.platform) && editApiProtocol === 'adaptive'"
           v-model:rows="editOpenCodeGoProtocolRules"
           :platform="account.platform"
@@ -216,18 +216,18 @@
           <div class="mt-2 grid gap-4 sm:grid-cols-2">
             <div>
               <label class="input-label">{{ t('admin.accounts.cnProviders.zhipuTeam.organization') }}</label>
-              <input v-model="editZhipuOrganization" type="text" class="input" :placeholder="t('admin.accounts.cnProviders.zhipuTeam.organizationPlaceholder')" />
+              <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'" v-model="editZhipuOrganization" type="text" class="input" :placeholder="t('admin.accounts.cnProviders.zhipuTeam.organizationPlaceholder')" />
             </div>
             <div>
               <label class="input-label">{{ t('admin.accounts.cnProviders.zhipuTeam.project') }}</label>
-              <input v-model="editZhipuProject" type="text" class="input" :placeholder="t('admin.accounts.cnProviders.zhipuTeam.projectPlaceholder')" />
+              <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'" v-model="editZhipuProject" type="text" class="input" :placeholder="t('admin.accounts.cnProviders.zhipuTeam.projectPlaceholder')" />
             </div>
           </div>
           <p class="input-hint mt-2">{{ t('admin.accounts.cnProviders.zhipuTeam.hint') }}</p>
         </div>
         <div>
           <label class="input-label">{{ t('admin.accounts.apiKey') }}</label>
-          <input
+          <input :disabled="!auth.can('accounts.credentials')" v-permission.disable="'accounts.credentials'"
             v-model="editApiKey"
             type="password"
             class="input font-mono"
@@ -275,7 +275,7 @@
                 ? 'mb-4 flex gap-1 rounded-xl bg-gray-100 p-1 dark:bg-dark-900'
                 : 'mb-4 flex gap-2'"
             >
-              <button
+              <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
                 type="button"
                 @click="modelRestrictionMode = 'whitelist'"
                 :aria-pressed="account.platform === 'grok' ? modelRestrictionMode === 'whitelist' : undefined"
@@ -309,7 +309,7 @@
                 </svg>
                 {{ t('admin.accounts.modelWhitelist') }}
               </button>
-              <button
+              <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
                 type="button"
                 @click="modelRestrictionMode = 'mapping'"
                 :aria-pressed="account.platform === 'grok' ? modelRestrictionMode === 'mapping' : undefined"
@@ -352,12 +352,12 @@
               :loading="diagnosticsLoading"
               :dirty="grokDiagnosticsDirty"
               :refresh-failed="diagnosticsRefreshFailed"
-              :can-sync="Boolean(account.id)"
+              :can-sync="Boolean(account.id) && auth.can('accounts.models.write')"
               :syncing="isGrokCatalogSyncing"
               @sync="requestGrokCatalogSync"
             />
 
-            <ModelWhitelistSelector
+            <ModelWhitelistSelector v-permission.disable="'accounts.models.write'"
               ref="grokApiKeyWhitelistRef"
               v-show="modelRestrictionMode === 'whitelist'"
               v-model="allowedModels"
@@ -419,7 +419,7 @@
                   ? 'grid grid-cols-[minmax(0,1fr)_1rem_minmax(0,1.2fr)_2rem] items-center gap-1.5 sm:gap-2'
                   : 'flex items-center gap-2'"
               >
-                <input
+                <input :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
                   v-model="mapping.from"
                   type="text"
                   :aria-label="account.platform === 'grok' ? t('admin.accounts.grokModelDiagnostics.mappingFromAria', { index: index + 1 }) : undefined"
@@ -447,14 +447,14 @@
                     d="M14 5l7 7m0 0l-7 7m7-7H3"
                   />
                 </svg>
-                <input
+                <input :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
                   v-model="mapping.to"
                   type="text"
                   :aria-label="account.platform === 'grok' ? t('admin.accounts.grokModelDiagnostics.mappingTargetAria', { index: index + 1 }) : undefined"
                   :class="account.platform === 'grok' ? 'input min-w-0 w-full font-mono text-xs' : 'input flex-1'"
                   :placeholder="t('admin.accounts.actualModel')"
                 />
-                <button
+                <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
                   type="button"
                   @click="removeModelMapping(index)"
                   :aria-label="account.platform === 'grok' ? t('admin.accounts.grokModelDiagnostics.removeMappingAria', { index: index + 1 }) : undefined"
@@ -475,7 +475,7 @@
               </div>
             </div>
 
-            <button
+            <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
               type="button"
               @click="addModelMapping"
               :data-testid="account.platform === 'grok' ? 'grok-model-mapping-add' : undefined"
@@ -501,7 +501,7 @@
 
               <!-- Quick Add Buttons -->
               <div class="flex flex-wrap gap-2">
-                <button
+                <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
                   v-for="preset in presetMappings"
                   :key="preset.label"
                   type="button"
@@ -524,7 +524,7 @@
                 {{ t('admin.accounts.poolModeHint') }}
               </p>
             </div>
-            <button
+            <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               type="button"
               @click="poolModeEnabled = !poolModeEnabled"
               :class="[
@@ -548,7 +548,7 @@
           </div>
           <div v-if="poolModeEnabled" class="mt-3">
             <label class="input-label">{{ t('admin.accounts.poolModeRetryCount') }}</label>
-            <input
+            <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               v-model.number="poolModeRetryCount"
               type="number"
               min="0"
@@ -567,7 +567,7 @@
           </div>
           <div v-if="poolModeEnabled" class="mt-3">
             <label class="input-label">{{ t('admin.accounts.poolModeRetryStatusCodes') }}</label>
-            <input
+            <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               v-model="poolModeRetryStatusCodesInput"
               type="text"
               class="input"
@@ -592,7 +592,7 @@
                 {{ t('admin.accounts.explicitCacheUpstreamHint') }}
               </p>
             </div>
-            <Toggle
+            <Toggle v-permission.disable="'accounts.configuration'"
               v-model="explicitCacheUpstreamEnabled"
               data-testid="explicit-cache-upstream-toggle"
               :aria-label="t('admin.accounts.explicitCacheUpstream')"
@@ -606,7 +606,7 @@
           </div>
           <div v-if="explicitCacheUpstreamEnabled" class="mt-3">
             <label class="input-label">{{ t('admin.accounts.explicitCacheUpstreamMaxTTL') }}</label>
-            <input
+            <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               v-model="explicitCacheUpstreamMaxTTL"
               data-testid="explicit-cache-upstream-max-ttl"
               type="number"
@@ -630,7 +630,7 @@
                 {{ t('admin.accounts.customErrorCodesHint') }}
               </p>
             </div>
-            <button
+            <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               type="button"
               @click="customErrorCodesEnabled = !customErrorCodesEnabled"
               :class="[
@@ -657,7 +657,7 @@
 
             <!-- Error Code Buttons -->
             <div class="flex flex-wrap gap-2">
-              <button
+              <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
                 v-for="code in commonErrorCodes"
                 :key="code.value"
                 type="button"
@@ -675,7 +675,7 @@
 
             <!-- Manual input -->
             <div class="flex items-center gap-2">
-              <input
+              <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
                 v-model.number="customErrorCodeInput"
                 type="number"
                 min="100"
@@ -684,7 +684,7 @@
                 :placeholder="t('admin.accounts.enterErrorCode')"
                 @keyup.enter="addCustomErrorCode"
               />
-              <button type="button" @click="addCustomErrorCode" class="btn btn-secondary px-3">
+              <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'" type="button" @click="addCustomErrorCode" class="btn btn-secondary px-3">
                 <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
                     stroke-linecap="round"
@@ -704,7 +704,7 @@
                 class="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-sm font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400"
               >
                 {{ code }}
-                <button
+                <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
                   type="button"
                   @click="removeErrorCode(code)"
                   class="hover:text-red-900 dark:hover:text-red-300"
@@ -733,7 +733,7 @@
               {{ t('admin.accounts.grokClientToolCache.hint') }}
             </p>
           </div>
-          <Toggle
+          <Toggle v-permission.disable="'accounts.configuration'"
             v-model="grokClientToolCacheEnabled"
             data-testid="grok-client-tool-cache-toggle"
             :aria-label="t('admin.accounts.grokClientToolCache.title')"
@@ -754,11 +754,11 @@
               {{ t('admin.accounts.grokMediaEligibility.hint') }}
             </p>
           </div>
-          <select
+          <select v-permission.disable="'accounts.update'"
             v-model="grokMediaEligibilityMode"
             class="input"
             data-testid="grok-media-eligibility-mode"
-            :disabled="grokMediaEligibilityLoading"
+            :disabled="(grokMediaEligibilityLoading) || !auth.can('accounts.update')"
           >
             <option value="auto">{{ t('admin.accounts.grokMediaEligibility.auto') }}</option>
             <option value="enabled">{{ t('admin.accounts.grokMediaEligibility.enabled') }}</option>
@@ -804,7 +804,7 @@
               {{ t('admin.accounts.grokCustomBaseUrl.hint') }}
             </p>
           </div>
-          <button
+          <button :disabled="!auth.can('accounts.network')" v-permission.disable="'accounts.network'"
             type="button"
             data-testid="grok-custom-base-url-toggle"
             @click="grokOAuthCustomBaseUrlEnabled = !grokOAuthCustomBaseUrlEnabled"
@@ -822,14 +822,14 @@
           </button>
         </div>
         <div v-if="grokOAuthCustomBaseUrlEnabled" class="space-y-2">
-          <input
+          <input :disabled="!auth.can('accounts.network')" v-permission.disable="'accounts.network'"
             v-model="grokOAuthBaseUrl"
             type="text"
             class="input"
             data-testid="grok-custom-base-url-input"
             :placeholder="t('admin.accounts.grokCustomBaseUrl.placeholder')"
           />
-          <GrokBaseUrlPresets @select="grokOAuthBaseUrl = $event" />
+          <GrokBaseUrlPresets v-permission.disable="'accounts.network'" @select="grokOAuthBaseUrl = $event" />
         </div>
       </div>
 
@@ -842,7 +842,7 @@
               {{ t('admin.accounts.headerOverride.hint') }}
             </p>
           </div>
-          <button
+          <button :disabled="!auth.can('accounts.network')" v-permission.disable="'accounts.network'"
             type="button"
             @click="headerOverrideEnabled = !headerOverrideEnabled"
             :class="[
@@ -859,7 +859,7 @@
           </button>
         </div>
 
-        <div v-if="headerOverrideEnabled" class="space-y-3">
+        <div v-permission.disable="'accounts.network'" v-if="headerOverrideEnabled" class="space-y-3">
           <div class="rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
             <p class="text-xs text-blue-700 dark:text-blue-400">
               <Icon name="exclamationCircle" size="sm" class="mr-1 inline" :stroke-width="2" />
@@ -899,7 +899,7 @@
               ? 'mb-4 flex gap-1 rounded-xl bg-gray-100 p-1 dark:bg-dark-900'
               : 'mb-4 flex gap-2'"
           >
-            <button
+            <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
               type="button"
               @click="modelRestrictionMode = 'whitelist'"
               :aria-pressed="account.platform === 'grok' ? modelRestrictionMode === 'whitelist' : undefined"
@@ -919,7 +919,7 @@
             >
               {{ t('admin.accounts.modelWhitelist') }}
             </button>
-            <button
+            <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
               type="button"
               @click="modelRestrictionMode = 'mapping'"
               :aria-pressed="account.platform === 'grok' ? modelRestrictionMode === 'mapping' : undefined"
@@ -948,12 +948,12 @@
             :loading="diagnosticsLoading"
             :dirty="grokDiagnosticsDirty"
             :refresh-failed="diagnosticsRefreshFailed"
-            :can-sync="Boolean(account.id)"
+            :can-sync="Boolean(account.id) && auth.can('accounts.models.write')"
             :syncing="isGrokCatalogSyncing"
             @sync="requestGrokCatalogSync"
           />
 
-          <ModelWhitelistSelector
+          <ModelWhitelistSelector v-permission.disable="'accounts.models.write'"
             ref="grokOAuthWhitelistRef"
             v-show="modelRestrictionMode === 'whitelist'"
             v-model="allowedModels"
@@ -1000,7 +1000,7 @@
                   ? 'grid grid-cols-[minmax(0,1fr)_1rem_minmax(0,1.2fr)_2rem] items-center gap-1.5 sm:gap-2'
                   : 'flex items-center gap-2'"
               >
-                <input
+                <input :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
                   v-model="mapping.from"
                   type="text"
                   :aria-label="account.platform === 'grok' ? t('admin.accounts.grokModelDiagnostics.mappingFromAria', { index: index + 1 }) : undefined"
@@ -1028,14 +1028,14 @@
                     d="M14 5l7 7m0 0l-7 7m7-7H3"
                   />
                 </svg>
-                <input
+                <input :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
                   v-model="mapping.to"
                   type="text"
                   :aria-label="account.platform === 'grok' ? t('admin.accounts.grokModelDiagnostics.mappingTargetAria', { index: index + 1 }) : undefined"
                   :class="account.platform === 'grok' ? 'input min-w-0 w-full font-mono text-xs' : 'input flex-1'"
                   :placeholder="t('admin.accounts.actualModel')"
                 />
-                <button
+                <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
                   type="button"
                   @click="removeModelMapping(index)"
                   :aria-label="account.platform === 'grok' ? t('admin.accounts.grokModelDiagnostics.removeMappingAria', { index: index + 1 }) : undefined"
@@ -1056,7 +1056,7 @@
               </div>
             </div>
 
-            <button
+            <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
               type="button"
               @click="addModelMapping"
               :data-testid="account.platform === 'grok' ? 'grok-model-mapping-add' : undefined"
@@ -1069,7 +1069,7 @@
 
             <!-- Quick Add Buttons -->
             <div class="flex flex-wrap gap-2">
-              <button
+              <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
                 v-for="preset in presetMappings"
                 :key="'oauth-' + preset.label"
                 type="button"
@@ -1087,7 +1087,7 @@
       <div v-if="account.type === 'upstream'" class="space-y-4">
         <div>
           <label class="input-label">{{ t('admin.accounts.upstream.baseUrl') }}</label>
-          <input
+          <input :disabled="!auth.can('accounts.network')" v-permission.disable="'accounts.network'"
             v-model="editBaseUrl"
             type="text"
             class="input"
@@ -1097,7 +1097,7 @@
         </div>
         <div>
           <label class="input-label">{{ t('admin.accounts.upstream.apiKey') }}</label>
-          <input
+          <input :disabled="!auth.can('accounts.credentials')" v-permission.disable="'accounts.credentials'"
             v-model="editApiKey"
             type="password"
             class="input font-mono"
@@ -1111,7 +1111,7 @@
       <div v-if="(account.platform === 'gemini' || account.platform === 'anthropic') && account.type === 'service_account'" class="space-y-4">
         <div v-if="isVertexAPIKeyMode">
           <label class="input-label">API Key</label>
-          <input
+          <input :disabled="!auth.can('accounts.credentials')" v-permission.disable="'accounts.credentials'"
             v-model="editVertexApiKey"
             type="password"
             class="input font-mono"
@@ -1123,7 +1123,7 @@
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div v-if="isVertexAPIKeyMode">
             <label class="input-label">Project ID</label>
-            <input
+            <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               v-model="editVertexProjectId"
               type="text"
               class="input font-mono"
@@ -1134,7 +1134,7 @@
           </div>
           <div v-else>
             <label class="input-label">Project ID</label>
-            <input
+            <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               v-model="editVertexProjectId"
               type="text"
               class="input font-mono"
@@ -1145,7 +1145,7 @@
           </div>
           <div v-if="!isVertexAPIKeyMode || editVertexProjectId.trim()">
             <label class="input-label">Location</label>
-            <select
+            <select :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               v-model="editVertexLocation"
               required
               class="input font-mono"
@@ -1174,7 +1174,7 @@
 
           <!-- Mode Toggle -->
           <div class="mb-4 flex gap-2">
-            <button
+            <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
               type="button"
               @click="modelRestrictionMode = 'whitelist'"
               :class="[
@@ -1199,7 +1199,7 @@
               </svg>
               {{ t('admin.accounts.modelWhitelist') }}
             </button>
-            <button
+            <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
               type="button"
               @click="modelRestrictionMode = 'mapping'"
               :class="[
@@ -1228,7 +1228,7 @@
 
           <!-- Whitelist Mode -->
           <div v-if="modelRestrictionMode === 'whitelist'">
-            <ModelWhitelistSelector v-model="allowedModels" :model-mappings="modelMappings" :platform="account?.platform || 'anthropic'" :account-id="account?.id" />
+            <ModelWhitelistSelector v-permission.disable="'accounts.models.write'" v-model="allowedModels" :model-mappings="modelMappings" :platform="account?.platform || 'anthropic'" :account-id="account?.id" />
             <p class="text-xs text-gray-500 dark:text-gray-400">
               {{ t('admin.accounts.selectedModels', { count: allowedModels.length }) }}
               <span v-if="allowedModels.length === 0 && modelMappings.length === 0">{{
@@ -1265,7 +1265,7 @@
                 :key="getModelMappingKey(mapping)"
                 class="flex items-center gap-2"
               >
-                <input
+                <input :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
                   v-model="mapping.from"
                   type="text"
                   class="input flex-1"
@@ -1284,13 +1284,13 @@
                     d="M14 5l7 7m0 0l-7 7m7-7H3"
                   />
                 </svg>
-                <input
+                <input :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
                   v-model="mapping.to"
                   type="text"
                   class="input flex-1"
                   :placeholder="t('admin.accounts.actualModel')"
                 />
-                <button
+                <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
                   type="button"
                   @click="removeModelMapping(index)"
                   class="rounded-lg p-2 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
@@ -1307,7 +1307,7 @@
               </div>
             </div>
 
-            <button
+            <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
               type="button"
               @click="addModelMapping"
               class="mb-3 w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
@@ -1330,7 +1330,7 @@
 
             <!-- Quick Add Buttons -->
             <div class="flex flex-wrap gap-2">
-              <button
+              <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
                 v-for="preset in presetMappings"
                 :key="preset.label"
                 type="button"
@@ -1350,7 +1350,7 @@
         <template v-if="!isBedrockAPIKeyMode">
           <div>
             <label class="input-label">{{ t('admin.accounts.bedrockAccessKeyId') }}</label>
-            <input
+            <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               v-model="editBedrockAccessKeyId"
               type="text"
               class="input font-mono"
@@ -1359,7 +1359,7 @@
           </div>
           <div>
             <label class="input-label">{{ t('admin.accounts.bedrockSecretAccessKey') }}</label>
-            <input
+            <input :disabled="!auth.can('accounts.credentials')" v-permission.disable="'accounts.credentials'"
               v-model="editBedrockSecretAccessKey"
               type="password"
               class="input font-mono"
@@ -1369,7 +1369,7 @@
           </div>
           <div>
             <label class="input-label">{{ t('admin.accounts.bedrockSessionToken') }}</label>
-            <input
+            <input :disabled="!auth.can('accounts.credentials')" v-permission.disable="'accounts.credentials'"
               v-model="editBedrockSessionToken"
               type="password"
               class="input font-mono"
@@ -1382,7 +1382,7 @@
         <!-- API Key field -->
         <div v-if="isBedrockAPIKeyMode">
           <label class="input-label">{{ t('admin.accounts.bedrockApiKeyInput') }}</label>
-          <input
+          <input :disabled="!auth.can('accounts.credentials')" v-permission.disable="'accounts.credentials'"
             v-model="editBedrockApiKeyValue"
             type="password"
             class="input font-mono"
@@ -1394,7 +1394,7 @@
         <!-- Shared: Region -->
         <div>
           <label class="input-label">{{ t('admin.accounts.bedrockRegion') }}</label>
-          <input
+          <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
             v-model="editBedrockRegion"
             type="text"
             class="input"
@@ -1406,7 +1406,7 @@
         <!-- Shared: Force Global -->
         <div>
           <label class="flex items-center gap-2 cursor-pointer">
-            <input
+            <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               v-model="editBedrockForceGlobal"
               type="checkbox"
               class="rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-500"
@@ -1422,7 +1422,7 @@
 
           <!-- Mode Toggle -->
           <div class="mb-4 flex gap-2">
-            <button
+            <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
               type="button"
               @click="modelRestrictionMode = 'whitelist'"
               :class="[
@@ -1434,7 +1434,7 @@
             >
               {{ t('admin.accounts.modelWhitelist') }}
             </button>
-            <button
+            <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
               type="button"
               @click="modelRestrictionMode = 'mapping'"
               :class="[
@@ -1450,7 +1450,7 @@
 
           <!-- Whitelist Mode -->
           <div v-if="modelRestrictionMode === 'whitelist'">
-            <ModelWhitelistSelector v-model="allowedModels" :model-mappings="modelMappings" platform="anthropic" />
+            <ModelWhitelistSelector v-permission.disable="'accounts.models.write'" v-model="allowedModels" :model-mappings="modelMappings" platform="anthropic" />
             <p class="text-xs text-gray-500 dark:text-gray-400">
               {{ t('admin.accounts.selectedModels', { count: allowedModels.length }) }}
               <span v-if="allowedModels.length === 0 && modelMappings.length === 0">{{ t('admin.accounts.supportsAllModels') }}</span>
@@ -1460,19 +1460,19 @@
           <!-- Mapping Mode -->
           <div v-else class="space-y-3">
             <div v-for="(mapping, index) in modelMappings" :key="getModelMappingKey(mapping)" class="flex items-center gap-2">
-              <input v-model="mapping.from" type="text" class="input flex-1" :placeholder="t('admin.accounts.fromModel')" />
+              <input :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'" v-model="mapping.from" type="text" class="input flex-1" :placeholder="t('admin.accounts.fromModel')" />
               <span class="text-gray-400">→</span>
-              <input v-model="mapping.to" type="text" class="input flex-1" :placeholder="t('admin.accounts.toModel')" />
-              <button type="button" @click="modelMappings.splice(index, 1)" class="text-red-500 hover:text-red-700">
+              <input :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'" v-model="mapping.to" type="text" class="input flex-1" :placeholder="t('admin.accounts.toModel')" />
+              <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'" type="button" @click="modelMappings.splice(index, 1)" class="text-red-500 hover:text-red-700">
                 <Icon name="trash" size="sm" />
               </button>
             </div>
-            <button type="button" @click="modelMappings.push({ from: '', to: '' })" class="btn btn-secondary text-sm">
+            <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'" type="button" @click="modelMappings.push({ from: '', to: '' })" class="btn btn-secondary text-sm">
               + {{ t('admin.accounts.addMapping') }}
             </button>
             <!-- Bedrock Preset Mappings -->
             <div class="flex flex-wrap gap-2">
-              <button
+              <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
                 v-for="preset in bedrockPresets"
                 :key="preset.from"
                 type="button"
@@ -1494,7 +1494,7 @@
                 {{ t('admin.accounts.poolModeHint') }}
               </p>
             </div>
-            <button
+            <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               type="button"
               @click="poolModeEnabled = !poolModeEnabled"
               :class="[
@@ -1518,7 +1518,7 @@
           </div>
           <div v-if="poolModeEnabled" class="mt-3">
             <label class="input-label">{{ t('admin.accounts.poolModeRetryCount') }}</label>
-            <input
+            <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               v-model.number="poolModeRetryCount"
               type="number"
               min="0"
@@ -1537,7 +1537,7 @@
           </div>
           <div v-if="poolModeEnabled" class="mt-3">
             <label class="input-label">{{ t('admin.accounts.poolModeRetryStatusCodes') }}</label>
-            <input
+            <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               v-model="poolModeRetryStatusCodesInput"
               type="text"
               class="input"
@@ -1555,7 +1555,7 @@
         class="border-t border-gray-200 pt-4 dark:border-dark-600"
       >
         <label class="input-label">{{ t('admin.accounts.antigravityProjectIdLabel') }}</label>
-        <input
+        <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
           v-model="antigravityProjectId"
           data-testid="antigravity-project-id-input"
           type="text"
@@ -1577,10 +1577,10 @@
           </div>
 
           <div class="mb-3 flex flex-wrap gap-2">
-            <button
+            <button v-permission.disable="'accounts.models.write'"
               type="button"
               @click="syncAntigravityUpstreamModels"
-              :disabled="isSyncingAntigravityUpstream || !account?.id"
+              :disabled="(isSyncingAntigravityUpstream || !account?.id) || !auth.can('accounts.models.write')"
               class="rounded-lg border border-emerald-200 px-3 py-1.5 text-sm text-emerald-600 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-900/30"
             >
               {{ isSyncingAntigravityUpstream ? t('admin.accounts.syncUpstreamModelsLoading') : t('admin.accounts.syncUpstreamModels') }}
@@ -1594,7 +1594,7 @@
               class="space-y-1"
             >
               <div class="flex items-center gap-2">
-                <input
+                <input :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
                   v-model="mapping.from"
                   type="text"
                   :class="[
@@ -1607,7 +1607,7 @@
                 <svg class="h-4 w-4 flex-shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
                 </svg>
-                <input
+                <input :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
                   v-model="mapping.to"
                   type="text"
                   :class="[
@@ -1616,7 +1616,7 @@
                   ]"
                   :placeholder="t('admin.accounts.actualModel')"
                 />
-                <button
+                <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
                   type="button"
                   @click="removeAntigravityModelMapping(index)"
                   class="rounded-lg p-2 text-red-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20"
@@ -1641,7 +1641,7 @@
             </div>
           </div>
 
-          <button
+          <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
             type="button"
             @click="addAntigravityModelMapping"
             class="mb-3 w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
@@ -1653,7 +1653,7 @@
           </button>
 
           <div class="flex flex-wrap gap-2">
-            <button
+            <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
               v-for="preset in antigravityPresetMappings"
               :key="preset.label"
               type="button"
@@ -1675,7 +1675,7 @@
               {{ t('admin.accounts.tempUnschedulable.hint') }}
             </p>
           </div>
-          <button
+          <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
             type="button"
             @click="tempUnschedEnabled = !tempUnschedEnabled"
             :class="[
@@ -1701,7 +1701,7 @@
           </div>
 
           <div class="flex flex-wrap gap-2">
-            <button
+            <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               v-for="preset in tempUnschedPresets"
               :key="preset.label"
               type="button"
@@ -1723,17 +1723,17 @@
                   {{ t('admin.accounts.tempUnschedulable.ruleIndex', { index: index + 1 }) }}
                 </span>
                 <div class="flex items-center gap-2">
-                  <button
+                  <button v-permission.disable="'accounts.configuration'"
                     type="button"
-                    :disabled="index === 0"
+                    :disabled="(index === 0) || !auth.can('accounts.configuration')"
                     @click="moveTempUnschedRule(index, -1)"
                     class="rounded p-1 text-gray-400 transition-colors hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:text-gray-200"
                   >
                     <Icon name="chevronUp" size="sm" :stroke-width="2" />
                   </button>
-                  <button
+                  <button v-permission.disable="'accounts.configuration'"
                     type="button"
-                    :disabled="index === tempUnschedRules.length - 1"
+                    :disabled="(index === tempUnschedRules.length - 1) || !auth.can('accounts.configuration')"
                     @click="moveTempUnschedRule(index, 1)"
                     class="rounded p-1 text-gray-400 transition-colors hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:text-gray-200"
                   >
@@ -1741,7 +1741,7 @@
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
-                  <button
+                  <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
                     type="button"
                     @click="removeTempUnschedRule(index)"
                     class="rounded p-1 text-red-500 transition-colors hover:text-red-600"
@@ -1754,7 +1754,7 @@
               <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div>
                   <label class="input-label">{{ t('admin.accounts.tempUnschedulable.errorCode') }}</label>
-                  <input
+                  <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
                     v-model.number="rule.error_code"
                     type="number"
                     min="100"
@@ -1765,7 +1765,7 @@
                 </div>
                 <div>
                   <label class="input-label">{{ t('admin.accounts.tempUnschedulable.durationMinutes') }}</label>
-                  <input
+                  <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
                     v-model.number="rule.duration_minutes"
                     type="number"
                     min="1"
@@ -1780,7 +1780,7 @@
                     role="radiogroup"
                     :aria-label="t('admin.accounts.tempUnschedulable.scope')"
                   >
-                    <button
+                    <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
                       v-for="option in tempUnschedScopeOptions"
                       :key="option.value"
                       type="button"
@@ -1813,7 +1813,7 @@
                 </div>
                 <div class="sm:col-span-2">
                   <label class="input-label">{{ t('admin.accounts.tempUnschedulable.keywords') }}</label>
-                  <input
+                  <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
                     v-model="rule.keywords"
                     type="text"
                     class="input"
@@ -1823,7 +1823,7 @@
                 </div>
                 <div class="sm:col-span-2">
                   <label class="input-label">{{ t('admin.accounts.tempUnschedulable.description') }}</label>
-                  <input
+                  <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
                     v-model="rule.description"
                     type="text"
                     class="input"
@@ -1834,7 +1834,7 @@
             </div>
           </div>
 
-          <button
+          <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
             type="button"
             @click="addTempUnschedRule()"
             class="w-full rounded-lg border-2 border-dashed border-gray-300 px-4 py-2 text-sm text-gray-600 transition-colors hover:border-gray-400 hover:text-gray-700 dark:border-dark-500 dark:text-gray-400 dark:hover:border-dark-400 dark:hover:text-gray-300"
@@ -1865,7 +1865,7 @@
               {{ t('admin.accounts.accountSchedulingThresholdOverrideHint') }}
             </p>
           </div>
-          <input
+          <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
             v-model="accountSchedulingThresholdOverrideEnabled"
             data-testid="account-scheduling-threshold-override-enabled"
             type="checkbox"
@@ -1874,7 +1874,7 @@
         </div>
         <div v-if="accountSchedulingThresholdOverrideEnabled">
           <label class="input-label">{{ t('admin.accounts.accountSchedulingThresholdOverrideValue') }}</label>
-          <input
+          <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
             v-model.number="accountSchedulingThresholdOverrideValue"
             data-testid="account-scheduling-threshold-override-value"
             type="number"
@@ -1900,7 +1900,7 @@
               {{ t('admin.accounts.interceptWarmupRequestsDesc') }}
             </p>
           </div>
-          <button
+          <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
             type="button"
             @click="interceptWarmupRequests = !interceptWarmupRequests"
             :class="[
@@ -1923,10 +1923,10 @@
           <label class="input-label mb-0">{{ t('admin.accounts.proxy') }}</label>
           <ProxyAdBanner />
         </div>
-        <ProxySelector v-model="form.proxy_id" :proxies="proxies" />
+        <ProxySelector v-permission.disable="'accounts.network'" v-model="form.proxy_id" :proxies="proxies" />
       </div>
 
-      <UpstreamRequestIdHeaderField
+      <UpstreamRequestIdHeaderField v-permission.disable="'accounts.configuration'"
         v-model="upstreamRequestIdHeader"
         :platform="account.platform"
         :type="account.type"
@@ -1935,19 +1935,19 @@
       <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <div>
           <label class="input-label">{{ t('admin.accounts.concurrency') }}</label>
-          <input v-model.number="form.concurrency" type="number" min="1" class="input"
+          <input :disabled="!auth.can('accounts.schedule')" v-permission.disable="'accounts.schedule'" v-model.number="form.concurrency" type="number" min="1" class="input"
             @input="form.concurrency = Math.max(1, form.concurrency || 1)" />
         </div>
         <div>
           <label class="input-label">{{ t('admin.accounts.loadFactor') }}</label>
-          <input v-model.number="form.load_factor" type="number" min="1"
+          <input :disabled="!auth.can('accounts.schedule')" v-permission.disable="'accounts.schedule'" v-model.number="form.load_factor" type="number" min="1"
             class="input" :placeholder="String(form.concurrency || 1)"
             @input="form.load_factor = (form.load_factor &amp;&amp; form.load_factor >= 1) ? form.load_factor : null" />
           <p class="input-hint">{{ t('admin.accounts.loadFactorHint') }}</p>
         </div>
         <div>
           <label class="input-label">{{ t('admin.accounts.priority') }}</label>
-          <input
+          <input :disabled="!auth.can('accounts.schedule')" v-permission.disable="'accounts.schedule'"
             v-model.number="form.priority"
             type="number"
             min="1"
@@ -1958,14 +1958,14 @@
         </div>
         <div>
           <label class="input-label">{{ t('admin.accounts.billingRateMultiplier') }}</label>
-          <input
+          <input v-permission.disable="'accounts.schedule'"
             v-model.number="form.rate_multiplier"
             type="number"
             min="0"
             step="0.001"
             class="input disabled:cursor-not-allowed disabled:opacity-60"
             data-testid="account-rate-multiplier"
-            :disabled="upstreamBillingRateSyncEnabled"
+            :disabled="(upstreamBillingRateSyncEnabled) || !auth.can('accounts.schedule')"
           />
           <p class="input-hint">
             {{
@@ -1988,7 +1988,7 @@
                 {{ t('admin.accounts.upstreamBilling.syncRateHint') }}
               </p>
             </div>
-            <Toggle
+            <Toggle v-permission.disable="'accounts.test'"
               :model-value="upstreamBillingRateSyncEnabled"
               data-testid="upstream-billing-rate-sync"
               :aria-label="t('admin.accounts.upstreamBilling.syncRate')"
@@ -1999,12 +1999,12 @@
       </div>
       <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
         <label class="input-label">{{ t('admin.accounts.expiresAt') }}</label>
-        <input v-model="expiresAtInput" type="datetime-local" class="input" />
+        <input :disabled="!auth.can('accounts.schedule')" v-permission.disable="'accounts.schedule'" v-model="expiresAtInput" type="datetime-local" class="input" />
         <div class="mt-2 flex gap-2">
-          <button type="button" class="btn btn-secondary btn-sm" @click="form.expires_at = getAccountExpiryTimestamp(1)">
+          <button :disabled="!auth.can('accounts.schedule')" v-permission.disable="'accounts.schedule'" type="button" class="btn btn-secondary btn-sm" @click="form.expires_at = getAccountExpiryTimestamp(1)">
             {{ t('payment.oneMonth') }}
           </button>
-          <button type="button" class="btn btn-secondary btn-sm" @click="form.expires_at = getAccountExpiryTimestamp(12)">
+          <button :disabled="!auth.can('accounts.schedule')" v-permission.disable="'accounts.schedule'" type="button" class="btn btn-secondary btn-sm" @click="form.expires_at = getAccountExpiryTimestamp(12)">
             {{ t('payment.oneYear') }}
           </button>
         </div>
@@ -2026,7 +2026,7 @@
               {{ t('admin.accounts.openai.oauthPassthroughDesc') }}
             </p>
           </div>
-          <button
+          <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
             type="button"
             @click="openaiPassthroughEnabled = !openaiPassthroughEnabled"
             :class="[
@@ -2056,7 +2056,7 @@
               {{ t('admin.accounts.openai.flattenNamespacesDesc') }}
             </p>
           </div>
-          <button
+          <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
             type="button"
             data-testid="edit-openai-flatten-namespaces-toggle"
             @click="openaiFlattenNamespacesEnabled = !openaiFlattenNamespacesEnabled"
@@ -2102,7 +2102,7 @@
           </div>
           <div class="border-t border-sky-100 bg-white/70 p-2 dark:border-sky-900/50 dark:bg-dark-800/70">
             <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              <button
+              <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
                 v-for="option in codexImageToolOptions"
                 :key="option.value"
                 type="button"
@@ -2135,7 +2135,7 @@
         </div>
       </div>
 
-      <CodexAdvancedSettings
+      <CodexAdvancedSettings v-permission.disable="'accounts.configuration'"
         v-if="supportsCodexDiagnostics(account)"
         v-model:http-to-ws="openaiHttpToWsEnabled"
         v-model:thread-isolation="codexThreadIsolationEnabled"
@@ -2157,7 +2157,7 @@
             </p>
           </div>
           <div class="w-52">
-            <Select v-model="openaiResponsesWebSocketV2Mode" data-testid="edit-openai-ws-mode-select" :options="openAIWSModeOptions" />
+            <Select v-permission.disable="'accounts.configuration'" v-model="openaiResponsesWebSocketV2Mode" data-testid="edit-openai-ws-mode-select" :options="openAIWSModeOptions" />
           </div>
         </div>
       </div>
@@ -2175,7 +2175,7 @@
             </p>
           </div>
           <div class="w-56">
-            <Select
+            <Select v-permission.disable="'accounts.configuration'"
               v-model="openAIResponsesMode"
               :options="openAIResponsesModeOptions"
               :disabled="!openAITextGenerationCapabilityEnabled"
@@ -2204,7 +2204,7 @@
               :key="option.value"
               class="flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm dark:border-dark-600"
             >
-              <input
+              <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
                 type="checkbox"
                 class="rounded border-gray-300 text-primary-600 focus:ring-primary-500 dark:border-dark-500"
                 :data-testid="`openai-endpoint-capability-${option.value}`"
@@ -2229,7 +2229,7 @@
             {{ t('admin.accounts.openai.imagesUrlToB64JsonDesc') }}
           </p>
         </div>
-        <button
+        <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
           type="button"
           data-testid="openai-images-url-to-b64-json-toggle"
           role="switch"
@@ -2259,7 +2259,7 @@
             {{ t('admin.accounts.upstreamBilling.autoProbeHint') }}
           </p>
         </div>
-        <Toggle
+        <Toggle v-permission.disable="'accounts.test'"
           :model-value="upstreamBillingAutoProbeEnabled"
           data-testid="upstream-billing-auto-probe"
           :aria-label="t('admin.accounts.upstreamBilling.autoProbe')"
@@ -2327,10 +2327,10 @@
           </div>
 
           <div class="flex flex-wrap items-center gap-2">
-            <button
+            <button v-permission.disable="'accounts.refresh'"
               type="button"
               class="btn btn-secondary btn-sm"
-              :disabled="opencodeGoRefreshing"
+              :disabled="opencodeGoRefreshing || !auth.can('accounts.refresh')"
               data-testid="opencode-go-refresh"
               @click="refreshOpenCodeGoUsage"
             >
@@ -2348,9 +2348,9 @@
                 {{ t('admin.accounts.opencodeGo.autoRefreshHint') }}
               </p>
             </div>
-            <Toggle
+            <Toggle v-permission.disable="'accounts.refresh'"
               :model-value="opencodeGoState?.auto_refresh_enabled ?? false"
-              :disabled="opencodeGoSaving"
+              :disabled="opencodeGoSaving || !auth.can('accounts.refresh')"
               data-testid="opencode-go-auto-refresh"
               @update:model-value="setOpenCodeGoAutoRefresh"
             />
@@ -2370,7 +2370,7 @@
               {{ t('admin.accounts.anthropic.apiKeyPassthroughDesc') }}
             </p>
           </div>
-          <button
+          <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
             type="button"
             @click="anthropicPassthroughEnabled = !anthropicPassthroughEnabled"
             :class="[
@@ -2399,7 +2399,7 @@
               {{ t('admin.accounts.anthropic.apiKeyAuthSchemeDesc') }}
             </p>
           </div>
-          <select v-model="anthropicAPIKeyAuthScheme" class="input w-52 text-sm">
+          <select :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'" v-model="anthropicAPIKeyAuthScheme" class="input w-52 text-sm">
             <option value="x_api_key">{{ t('admin.accounts.anthropic.apiKeyAuthSchemeXApiKey') }}</option>
             <option value="authorization_bearer">{{ t('admin.accounts.anthropic.apiKeyAuthSchemeBearer') }}</option>
           </select>
@@ -2418,7 +2418,7 @@
               {{ t('admin.accounts.anthropic.webSearchEmulationDesc') }}
             </p>
           </div>
-          <select v-model="webSearchEmulationMode" class="input w-24 text-sm">
+          <select :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'" v-model="webSearchEmulationMode" class="input w-24 text-sm">
             <option value="default">{{ t('admin.accounts.anthropic.webSearchDefault') }}</option>
             <option value="enabled">{{ t('admin.accounts.anthropic.webSearchEnabled') }}</option>
             <option value="disabled">{{ t('admin.accounts.anthropic.webSearchDisabled') }}</option>
@@ -2437,7 +2437,7 @@
             {{ t('admin.accounts.quotaControl.hint') }}
           </p>
         </div>
-        <QuotaLimitCard
+        <QuotaLimitCard v-permission.disable="'accounts.configuration'"
           :totalLimit="editQuotaLimit"
           :dailyLimit="editQuotaDailyLimit"
           :weeklyLimit="editQuotaWeeklyLimit"
@@ -2488,7 +2488,7 @@
             {{ t('admin.accounts.quotaLimitHint') }}
           </p>
         </div>
-        <QuotaLimitCard
+        <QuotaLimitCard v-permission.disable="'accounts.configuration'"
           :totalLimit="editQuotaLimit"
           :dailyLimit="editQuotaDailyLimit"
           :weeklyLimit="editQuotaWeeklyLimit"
@@ -2541,7 +2541,7 @@
               {{ t('admin.accounts.openai.longContextBillingDesc') }}
             </p>
           </div>
-          <button
+          <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
             type="button"
             data-testid="openai-long-context-billing-toggle"
             role="switch"
@@ -2573,7 +2573,7 @@
               {{ t('admin.accounts.openai.codexCLIOnlyDesc') }}
             </p>
           </div>
-          <button
+          <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
             type="button"
             @click="codexCLIOnlyEnabled = !codexCLIOnlyEnabled"
             :class="[
@@ -2599,7 +2599,7 @@
               {{ t('admin.accounts.openai.codexCLIOnlyAppServerDesc') }}
             </p>
           </div>
-          <button
+          <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
             type="button"
             @click="codexCLIOnlyAppServerEnabled = !codexCLIOnlyAppServerEnabled"
             :class="[
@@ -2630,7 +2630,7 @@
             </p>
           </div>
           <div class="w-52 flex-shrink-0">
-            <Select v-model="codexFingerprintMode" data-testid="edit-codex-fingerprint-mode-select" :options="codexFingerprintModeOptions" />
+            <Select v-permission.disable="'accounts.configuration'" v-model="codexFingerprintMode" data-testid="edit-codex-fingerprint-mode-select" :options="codexFingerprintModeOptions" />
           </div>
         </div>
       </div>
@@ -2648,7 +2648,7 @@
             </p>
           </div>
           <div class="w-44 flex-shrink-0">
-            <Select v-model="editPlanType" :options="planTypeOptions" />
+            <Select v-permission.disable="'accounts.configuration'" v-model="editPlanType" :options="planTypeOptions" />
           </div>
         </div>
       </div>
@@ -2665,7 +2665,7 @@
             </p>
           </div>
           <div class="w-44">
-            <Select v-model="openAICompactMode" :options="openAICompactModeOptions" />
+            <Select v-permission.disable="'accounts.configuration'" v-model="openAICompactMode" :options="openAICompactModeOptions" />
           </div>
         </div>
         <div class="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:bg-dark-700 dark:text-gray-300">
@@ -2687,25 +2687,25 @@
               :key="getOpenAICompactModelMappingKey(mapping)"
               class="flex items-center gap-2"
             >
-              <input
+              <input :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
                 v-model="mapping.from"
                 type="text"
                 class="input flex-1"
                 :placeholder="t('admin.accounts.fromModel')"
               />
               <span class="text-gray-400">→</span>
-              <input
+              <input :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'"
                 v-model="mapping.to"
                 type="text"
                 class="input flex-1"
                 :placeholder="t('admin.accounts.toModel')"
               />
-              <button type="button" @click="removeOpenAICompactModelMapping(index)" class="text-red-500 hover:text-red-700">
+              <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'" type="button" @click="removeOpenAICompactModelMapping(index)" class="text-red-500 hover:text-red-700">
                 <Icon name="trash" size="sm" />
               </button>
             </div>
           </div>
-          <button type="button" @click="addOpenAICompactModelMapping" class="btn btn-secondary text-sm">
+          <button :disabled="!auth.can('accounts.models.write')" v-permission.disable="'accounts.models.write'" type="button" @click="addOpenAICompactModelMapping" class="btn btn-secondary text-sm">
             + {{ t('admin.accounts.addMapping') }}
           </button>
         </div>
@@ -2721,7 +2721,7 @@
               {{ t('admin.accounts.autoPauseOnExpiredDesc') }}
             </p>
           </div>
-          <button
+          <button :disabled="!auth.can('accounts.schedule')" v-permission.disable="'accounts.schedule'"
             type="button"
             @click="autoPauseOnExpired = !autoPauseOnExpired"
             :class="[
@@ -2746,7 +2746,7 @@
         <div class="space-y-2">
           <div class="flex items-center justify-between">
             <label class="input-label mb-0">{{ t('admin.accounts.autoPause5hDisabled') }}</label>
-            <button
+            <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               type="button"
               @click="autoPause5hDisabled = !autoPause5hDisabled"
               :class="[
@@ -2767,14 +2767,14 @@
         </div>
         <div>
           <label class="input-label">{{ t('admin.accounts.autoPause5hThreshold') }}</label>
-          <input
+          <input v-permission.disable="'accounts.configuration'"
             v-model.number="autoPause5hThreshold"
             type="number"
             min="0"
             max="100"
             step="0.1"
             class="input"
-            :disabled="autoPause5hDisabled"
+            :disabled="(autoPause5hDisabled) || !auth.can('accounts.configuration')"
             data-testid="auto-pause-5h-threshold"
           />
           <p class="input-hint">{{ t('admin.accounts.autoPauseThresholdHint') }}</p>
@@ -2782,7 +2782,7 @@
         <div class="space-y-2">
           <div class="flex items-center justify-between">
             <label class="input-label mb-0">{{ t('admin.accounts.autoPause7dDisabled') }}</label>
-            <button
+            <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               type="button"
               @click="autoPause7dDisabled = !autoPause7dDisabled"
               :class="[
@@ -2803,14 +2803,14 @@
         </div>
         <div>
           <label class="input-label">{{ t('admin.accounts.autoPause7dThreshold') }}</label>
-          <input
+          <input v-permission.disable="'accounts.configuration'"
             v-model.number="autoPause7dThreshold"
             type="number"
             min="0"
             max="100"
             step="0.1"
             class="input"
-            :disabled="autoPause7dDisabled"
+            :disabled="(autoPause7dDisabled) || !auth.can('accounts.configuration')"
             data-testid="auto-pause-7d-threshold"
           />
           <p class="input-hint">{{ t('admin.accounts.autoPauseThresholdHint') }}</p>
@@ -2829,7 +2829,7 @@
               {{ t('admin.accounts.autoResetCredit.hint') }}
             </p>
           </div>
-          <button
+          <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
             type="button"
             data-testid="auto-reset-credit-enabled"
             @click="autoResetCreditEnabled = !autoResetCreditEnabled"
@@ -2849,27 +2849,27 @@
         <div class="grid gap-4 sm:grid-cols-2">
           <div>
             <label class="input-label">{{ t('admin.accounts.autoResetCredit.threshold5h') }}</label>
-            <input
+            <input v-permission.disable="'accounts.configuration'"
               v-model.number="autoResetCredit5hThreshold"
               type="number"
               min="0.1"
               max="100"
               step="0.1"
               class="input"
-              :disabled="!autoResetCreditEnabled"
+              :disabled="(!autoResetCreditEnabled) || !auth.can('accounts.configuration')"
               data-testid="auto-reset-credit-5h-threshold"
             />
           </div>
           <div>
             <label class="input-label">{{ t('admin.accounts.autoResetCredit.threshold7d') }}</label>
-            <input
+            <input v-permission.disable="'accounts.configuration'"
               v-model.number="autoResetCredit7dThreshold"
               type="number"
               min="0.1"
               max="100"
               step="0.1"
               class="input"
-              :disabled="!autoResetCreditEnabled"
+              :disabled="(!autoResetCreditEnabled) || !auth.can('accounts.configuration')"
               data-testid="auto-reset-credit-7d-threshold"
             />
           </div>
@@ -2898,7 +2898,7 @@
                 {{ t('admin.accounts.quotaControl.windowCost.hint') }}
               </p>
             </div>
-            <button
+            <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               type="button"
               @click="windowCostEnabled = !windowCostEnabled"
               :class="[
@@ -2920,7 +2920,7 @@
               <label class="input-label">{{ t('admin.accounts.quotaControl.windowCost.limit') }}</label>
               <div class="relative">
                 <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">$</span>
-                <input
+                <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
                   v-model.number="windowCostLimit"
                   type="number"
                   min="0"
@@ -2935,7 +2935,7 @@
               <label class="input-label">{{ t('admin.accounts.quotaControl.windowCost.stickyReserve') }}</label>
               <div class="relative">
                 <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 dark:text-gray-400">$</span>
-                <input
+                <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
                   v-model.number="windowCostStickyReserve"
                   type="number"
                   min="0"
@@ -2958,7 +2958,7 @@
                 {{ t('admin.accounts.quotaControl.sessionLimit.hint') }}
               </p>
             </div>
-            <button
+            <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               type="button"
               @click="sessionLimitEnabled = !sessionLimitEnabled"
               :class="[
@@ -2978,7 +2978,7 @@
           <div v-if="sessionLimitEnabled" class="grid grid-cols-2 gap-4">
             <div>
               <label class="input-label">{{ t('admin.accounts.quotaControl.sessionLimit.maxSessions') }}</label>
-              <input
+              <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
                 v-model.number="maxSessions"
                 type="number"
                 min="1"
@@ -2991,7 +2991,7 @@
             <div>
               <label class="input-label">{{ t('admin.accounts.quotaControl.sessionLimit.idleTimeout') }}</label>
               <div class="relative">
-                <input
+                <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
                   v-model.number="sessionIdleTimeout"
                   type="number"
                   min="1"
@@ -3015,7 +3015,7 @@
                 {{ t('admin.accounts.quotaControl.rpmLimit.hint') }}
               </p>
             </div>
-            <button
+            <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               type="button"
               @click="rpmLimitEnabled = !rpmLimitEnabled"
               :class="[
@@ -3035,7 +3035,7 @@
           <div v-if="rpmLimitEnabled" class="space-y-4">
             <div>
               <label class="input-label">{{ t('admin.accounts.quotaControl.rpmLimit.baseRpm') }}</label>
-              <input
+              <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
                 v-model.number="baseRpm"
                 type="number"
                 min="1"
@@ -3050,7 +3050,7 @@
             <div>
               <label class="input-label">{{ t('admin.accounts.quotaControl.rpmLimit.strategy') }}</label>
               <div class="flex gap-2">
-                <button
+                <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
                   type="button"
                   @click="rpmStrategy = 'tiered'"
                   :class="[
@@ -3065,7 +3065,7 @@
                     <div class="mt-0.5 text-[10px] opacity-70">{{ t('admin.accounts.quotaControl.rpmLimit.strategyTieredHint') }}</div>
                   </div>
                 </button>
-                <button
+                <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
                   type="button"
                   @click="rpmStrategy = 'sticky_exempt'"
                   :class="[
@@ -3085,7 +3085,7 @@
 
             <div v-if="rpmStrategy === 'tiered'">
               <label class="input-label">{{ t('admin.accounts.quotaControl.rpmLimit.stickyBuffer') }}</label>
-              <input
+              <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
                 v-model.number="rpmStickyBuffer"
                 type="number"
                 min="1"
@@ -3105,7 +3105,7 @@
               {{ t('admin.accounts.quotaControl.rpmLimit.userMsgQueueHint') }}
             </p>
             <div class="flex space-x-2">
-              <button type="button" v-for="opt in umqModeOptions" :key="opt.value"
+              <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'" type="button" v-for="opt in umqModeOptions" :key="opt.value"
                 @click="userMsgQueueMode = opt.value"
                 :class="[
                   'px-3 py-1.5 text-sm rounded-md border transition-colors',
@@ -3128,7 +3128,7 @@
                 {{ t('admin.accounts.quotaControl.tlsFingerprint.hint') }}
               </p>
             </div>
-            <button
+            <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               type="button"
               @click="tlsFingerprintEnabled = !tlsFingerprintEnabled"
               :class="[
@@ -3146,7 +3146,7 @@
           </div>
           <!-- Profile selector -->
           <div v-if="tlsFingerprintEnabled" class="mt-3">
-            <select v-model="tlsFingerprintProfileId" class="input">
+            <select :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'" v-model="tlsFingerprintProfileId" class="input">
               <option :value="null">{{ t('admin.accounts.quotaControl.tlsFingerprint.defaultProfile') }}</option>
               <option v-if="tlsFingerprintProfiles.length > 0" :value="-1">{{ t('admin.accounts.quotaControl.tlsFingerprint.randomProfile') }}</option>
               <option v-for="p in tlsFingerprintProfiles" :key="p.id" :value="p.id">{{ p.name }}</option>
@@ -3163,7 +3163,7 @@
                 {{ t('admin.accounts.quotaControl.sessionIdMasking.hint') }}
               </p>
             </div>
-            <button
+            <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               type="button"
               @click="sessionIdMaskingEnabled = !sessionIdMaskingEnabled"
               :class="[
@@ -3190,7 +3190,7 @@
                 {{ t('admin.accounts.quotaControl.cacheTTLOverride.hint') }}
               </p>
             </div>
-            <button
+            <button :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               type="button"
               @click="cacheTTLOverrideEnabled = !cacheTTLOverrideEnabled"
               :class="[
@@ -3208,7 +3208,7 @@
           </div>
           <div v-if="cacheTTLOverrideEnabled" class="mt-3">
             <label class="input-label text-xs">{{ t('admin.accounts.quotaControl.cacheTTLOverride.target') }}</label>
-            <select
+            <select :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               v-model="cacheTTLOverrideTarget"
               class="mt-1 block w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500 dark:border-dark-500 dark:bg-dark-700 dark:text-white"
             >
@@ -3230,7 +3230,7 @@
                 {{ t('admin.accounts.quotaControl.customBaseUrl.hint') }}
               </p>
             </div>
-            <button
+            <button :disabled="!auth.can('accounts.network')" v-permission.disable="'accounts.network'"
               type="button"
               @click="customBaseUrlEnabled = !customBaseUrlEnabled"
               :class="[
@@ -3247,7 +3247,7 @@
             </button>
           </div>
           <div v-if="customBaseUrlEnabled" class="mt-3">
-            <input
+            <input :disabled="!auth.can('accounts.network')" v-permission.disable="'accounts.network'"
               v-model="customBaseUrl"
               type="text"
               class="input"
@@ -3260,13 +3260,13 @@
       <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
         <div>
           <label class="input-label">{{ t('common.status') }}</label>
-          <Select v-model="form.status" :options="statusOptions" />
+          <Select v-permission.disable="'accounts.status'" v-model="form.status" :options="statusOptions" />
         </div>
 
         <!-- Mixed Scheduling (only for antigravity accounts, read-only in edit mode) -->
         <div v-if="account?.platform === 'antigravity'" class="flex items-center gap-2">
           <label class="flex cursor-not-allowed items-center gap-2 opacity-60">
-            <input
+            <input v-permission.disable="'accounts.configuration'"
               type="checkbox"
               v-model="mixedScheduling"
               disabled
@@ -3295,7 +3295,7 @@
         </div>
         <div v-if="account?.platform === 'antigravity'" class="mt-3 flex items-center gap-2">
           <label class="flex cursor-pointer items-center gap-2">
-            <input
+            <input :disabled="!auth.can('accounts.configuration')" v-permission.disable="'accounts.configuration'"
               type="checkbox"
               v-model="allowOverages"
               class="h-4 w-4 rounded border-gray-300 text-primary-500 focus:ring-primary-500 dark:border-dark-500"
@@ -3323,7 +3323,7 @@
       </div>
 
       <!-- Group Selection - 仅标准模式显示 -->
-      <GroupSelector
+      <GroupSelector v-permission.disable="'accounts.groups'"
         v-model="form.group_ids"
         :groups="selectableGroups"
         :platform="account?.platform"
@@ -3388,6 +3388,8 @@
 import { ref, reactive, computed, watch, nextTick, onBeforeUnmount, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
+import { buildAccountRolePatch } from '@/utils/accountEditPermissions'
 
 import { adminAPI } from '@/api/admin'
 import { useQuotaNotifyState } from '@/composables/useQuotaNotifyState'
@@ -3515,6 +3517,8 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const appStore = useAppStore()
+const auth = useAuthStore()
+let initialUpdatePayload: Record<string, unknown> = {}
 const browserTimeZone = getBrowserTimeZone()
 
 const selectableGroups = computed(() => {
@@ -3586,6 +3590,7 @@ const loadOpenCodeGoUsage = async () => {
 }
 
 const setOpenCodeGoAutoRefresh = async (enabled: boolean) => {
+  if (!auth.can('accounts.refresh')) return
   opencodeGoSaving.value = true
   try {
     applyOpenCodeGoState(await adminAPI.accounts.setOpenCodeGoUsageAutoRefresh(props.account!.id, enabled))
@@ -3597,6 +3602,7 @@ const setOpenCodeGoAutoRefresh = async (enabled: boolean) => {
 }
 
 const refreshOpenCodeGoUsage = async () => {
+  if (!auth.can('accounts.refresh')) return
   opencodeGoRefreshing.value = true
   try {
     applyOpenCodeGoState(await adminAPI.accounts.refreshOpenCodeGoUsage(props.account!.id))
@@ -4188,11 +4194,11 @@ const {
 } = useQuotaNotifyState()
 
 // Load global feature states once
-adminAPI.settings.getWebSearchEmulationConfig().then(cfg => {
+if (auth.can('settings.read')) adminAPI.settings.getWebSearchEmulationConfig().then(cfg => {
   webSearchGlobalEnabled.value = cfg?.enabled === true && (cfg?.providers?.length ?? 0) > 0
 }).catch(() => { webSearchGlobalEnabled.value = false })
 
-loadQuotaNotifyGlobal()
+if (auth.can('settings.read')) loadQuotaNotifyGlobal()
 const editQuotaLimit = ref<number | null>(null)
 const editQuotaDailyLimit = ref<number | null>(null)
 const editQuotaWeeklyLimit = ref<number | null>(null)
@@ -5045,19 +5051,6 @@ async function loadTLSProfiles() {
   }
 }
 
-watch(
-  [() => props.show, () => props.account],
-  ([show, newAccount], [wasShow, previousAccount]) => {
-    if (!show || !newAccount) {
-      return
-    }
-    if (!wasShow || newAccount !== previousAccount) {
-      syncFormFromAccount(newAccount)
-      loadTLSProfiles()
-    }
-  },
-  { immediate: true }
-)
 
 // Model mapping helpers
 const addModelMapping = () => {
@@ -5264,7 +5257,7 @@ const buildTempUnschedRules = (rules: TempUnschedRuleForm[]) => {
   return out
 }
 
-const applyTempUnschedConfig = (credentials: Record<string, unknown>) => {
+const applyTempUnschedConfig = (credentials: Record<string, unknown>, validate = true) => {
   if (!tempUnschedEnabled.value) {
     delete credentials.temp_unschedulable_enabled
     delete credentials.temp_unschedulable_rules
@@ -5272,7 +5265,7 @@ const applyTempUnschedConfig = (credentials: Record<string, unknown>) => {
   }
 
   const rules = buildTempUnschedRules(tempUnschedRules.value)
-  if (rules.length === 0) {
+  if (validate && rules.length === 0) {
     appStore.showError(t('admin.accounts.tempUnschedulable.rulesInvalid'))
     return false
   }
@@ -5577,6 +5570,7 @@ const handleClose = () => {
 const persistGrokMediaEligibility = async (accountID: number, updatedAccount: Account): Promise<Account> => {
   if (
     !isGrokOAuthAccount.value ||
+    !auth.can('accounts.update') ||
     grokMediaEligibilityMode.value === grokMediaEligibilityInitialMode.value ||
     typeof adminAPI.accounts.updateGrokMediaEligibility !== 'function'
   ) {
@@ -5614,7 +5608,9 @@ const persistGrokMediaEligibility = async (accountID: number, updatedAccount: Ac
 const submitUpdateAccount = async (accountID: number, updatePayload: Record<string, unknown>) => {
   submitting.value = true
   try {
-    let updatedAccount = await adminAPI.accounts.update(accountID, withAntigravityConfirmFlag(updatePayload))
+    let updatedAccount = Object.keys(updatePayload).length
+      ? await adminAPI.accounts.update(accountID, withAntigravityConfirmFlag(updatePayload))
+      : props.account!
     updatedAccount = await persistGrokMediaEligibility(accountID, updatedAccount)
     appStore.showSuccess(t('admin.accounts.accountUpdated'))
     emit('updated', updatedAccount)
@@ -5636,15 +5632,15 @@ const submitUpdateAccount = async (accountID: number, updatePayload: Record<stri
   }
 }
 
-const handleSubmit = async () => {
+// buildUpdatePayload 复用现有表单构造，初始化基线时不执行输入校验。
+const buildUpdatePayload = (validate = true): Record<string, unknown> | undefined => {
   if (!props.account) return
-  const accountID = props.account.id
 
-  if (form.status !== 'active' && form.status !== 'inactive' && form.status !== 'error') {
+  if (validate && form.status !== 'active' && form.status !== 'inactive' && form.status !== 'error') {
     appStore.showError(t('admin.accounts.pleaseSelectStatus'))
     return
   }
-	if (autoResetCreditEnabled.value) {
+	if (validate && auth.can('accounts.configuration') && autoResetCreditEnabled.value) {
 		const thresholds = [autoResetCredit5hThreshold.value, autoResetCredit7dThreshold.value]
 		if (thresholds.some((value) => !Number.isFinite(value) || value < 0.1 || value > 100)) {
 			appStore.showError(t('admin.accounts.autoResetCredit.thresholdInvalid'))
@@ -5729,7 +5725,7 @@ const handleSubmit = async () => {
         props.account.credentials_status?.has_api_key ?? Boolean(currentCredentials.api_key)
       if (editApiKey.value.trim()) {
         newCredentials.api_key = editApiKey.value.trim()
-      } else if (!hasExistingApiKey) {
+      } else if (validate && auth.can('accounts.credentials') && !hasExistingApiKey) {
         appStore.showError(t('admin.accounts.apiKeyIsRequired'))
         return
       }
@@ -5788,7 +5784,7 @@ const handleSubmit = async () => {
 
       // Add header override if enabled for this API-key platform
       if (isHeaderOverrideCapable(props.account.platform, 'apikey')) {
-        if (headerOverrideEnabled.value) {
+        if (validate && auth.can('accounts.network') && headerOverrideEnabled.value) {
           const headerError = validateHeaderOverrideRows(headerOverrideRows.value)
           if (headerError) {
             appStore.showError(t(`admin.accounts.headerOverride.${headerError}`))
@@ -5801,7 +5797,7 @@ const handleSubmit = async () => {
       // Add intercept warmup requests setting
       applyInterceptWarmup(newCredentials, interceptWarmupRequests.value, 'edit')
       applyAccountSchedulingThresholdOverridePatch(newCredentials, currentCredentials)
-      if (!applyTempUnschedConfig(newCredentials)) {
+      if (!applyTempUnschedConfig(newCredentials, validate && auth.can('accounts.configuration'))) {
         return
       }
 
@@ -5820,7 +5816,7 @@ const handleSubmit = async () => {
       applyInterceptWarmup(newCredentials, interceptWarmupRequests.value, 'edit')
 
       applyAccountSchedulingThresholdOverridePatch(newCredentials, currentCredentials)
-      if (!applyTempUnschedConfig(newCredentials)) {
+      if (!applyTempUnschedConfig(newCredentials, validate && auth.can('accounts.configuration'))) {
         return
       }
 
@@ -5836,12 +5832,12 @@ const handleSubmit = async () => {
         const hasExistingApiKey = credentialsStatus
           ? Boolean(credentialsStatus.has_api_key)
           : Boolean(currentCredentials.api_key)
-        if (!newApiKey && !hasExistingApiKey) {
+        if (validate && auth.can('accounts.credentials') && !newApiKey && !hasExistingApiKey) {
           appStore.showError(t('admin.accounts.vertexApiKeyRequired'))
           return
         }
         const projectId = editVertexProjectId.value.trim()
-        if (projectId && !editVertexLocation.value.trim()) {
+        if (validate && auth.can('accounts.configuration') && projectId && !editVertexLocation.value.trim()) {
           appStore.showError(t('admin.accounts.vertexLocationRequired'))
           return
         }
@@ -5855,15 +5851,15 @@ const handleSubmit = async () => {
         }
         newCredentials.location = editVertexLocation.value.trim() || 'global'
       } else {
-        if (!editVertexProjectId.value.trim()) {
+        if (validate && auth.can('accounts.configuration') && !editVertexProjectId.value.trim()) {
           appStore.showError(t('admin.accounts.vertexSaJsonMissingProjectId'))
           return
         }
-        if (!editVertexClientEmail.value.trim()) {
+        if (validate && auth.can('accounts.configuration') && !editVertexClientEmail.value.trim()) {
           appStore.showError(t('admin.accounts.vertexSaJsonMissingClientEmail'))
           return
         }
-        if (!editVertexLocation.value.trim()) {
+        if (validate && auth.can('accounts.configuration') && !editVertexLocation.value.trim()) {
           appStore.showError(t('admin.accounts.vertexLocationRequired'))
           return
         }
@@ -5875,7 +5871,7 @@ const handleSubmit = async () => {
               credentialsStatus.has_service_account_json || credentialsStatus.has_service_account
             )
           : Boolean(currentCredentials.service_account_json || currentCredentials.service_account)
-        if (!hasExistingServiceAccountJson) {
+        if (validate && auth.can('accounts.credentials') && !hasExistingServiceAccountJson) {
           appStore.showError(t('admin.accounts.vertexSaJsonRequired'))
           return
         }
@@ -5895,7 +5891,7 @@ const handleSubmit = async () => {
 
       applyInterceptWarmup(newCredentials, interceptWarmupRequests.value, 'edit')
       applyAccountSchedulingThresholdOverridePatch(newCredentials, currentCredentials)
-      if (!applyTempUnschedConfig(newCredentials)) {
+      if (!applyTempUnschedConfig(newCredentials, validate && auth.can('accounts.configuration'))) {
         return
       }
 
@@ -5953,7 +5949,7 @@ const handleSubmit = async () => {
 
       applyInterceptWarmup(newCredentials, interceptWarmupRequests.value, 'edit')
       applyAccountSchedulingThresholdOverridePatch(newCredentials, currentCredentials)
-      if (!applyTempUnschedConfig(newCredentials)) {
+      if (!applyTempUnschedConfig(newCredentials, validate && auth.can('accounts.configuration'))) {
         return
       }
 
@@ -5965,7 +5961,7 @@ const handleSubmit = async () => {
 
       applyInterceptWarmup(newCredentials, interceptWarmupRequests.value, 'edit')
       applyAccountSchedulingThresholdOverridePatch(newCredentials, currentCredentials)
-      if (!applyTempUnschedConfig(newCredentials)) {
+      if (!applyTempUnschedConfig(newCredentials, validate && auth.can('accounts.configuration'))) {
         return
       }
 
@@ -6003,11 +5999,11 @@ const handleSubmit = async () => {
 
       if (grokOAuthCustomBaseUrlEnabled.value) {
         const trimmedBaseUrl = grokOAuthBaseUrl.value.trim()
-        if (!trimmedBaseUrl) {
+        if (validate && auth.can('accounts.network') && !trimmedBaseUrl) {
           appStore.showError(t('admin.accounts.grokCustomBaseUrl.required'))
           return
         }
-        if (!/^https?:\/\//i.test(trimmedBaseUrl)) {
+        if (validate && auth.can('accounts.network') && !/^https?:\/\//i.test(trimmedBaseUrl)) {
           appStore.showError(t('admin.accounts.grokCustomBaseUrl.invalid'))
           return
         }
@@ -6016,7 +6012,7 @@ const handleSubmit = async () => {
         delete newCredentials.base_url
       }
 
-      if (headerOverrideEnabled.value) {
+      if (validate && auth.can('accounts.network') && headerOverrideEnabled.value) {
         const headerError = validateHeaderOverrideRows(headerOverrideRows.value)
         if (headerError) {
           appStore.showError(t(`admin.accounts.headerOverride.${headerError}`))
@@ -6409,17 +6405,42 @@ const handleSubmit = async () => {
     // 检测结果由服务端托管，账号编辑不提交打开弹窗时的旧快照。
     if (updatePayload.extra) delete (updatePayload.extra as Record<string, unknown>).model_consistency_results
 
+    return updatePayload
+  } catch (error: any) {
+    if (validate) appStore.showError(error.message || t('admin.accounts.failedToUpdate'))
+  }
+}
+
+watch(
+  [() => props.show, () => props.account],
+  ([show, newAccount], [wasShow, previousAccount]) => {
+    if (!show || !newAccount) {
+      return
+    }
+    if (!wasShow || newAccount !== previousAccount) {
+      syncFormFromAccount(newAccount)
+      initialUpdatePayload = auth.isAdmin ? {} : JSON.parse(JSON.stringify(buildUpdatePayload(false) || {}))
+      if (auth.can('tls_fingerprints.read')) loadTLSProfiles()
+    }
+  },
+  { immediate: true }
+)
+
+
+// handleSubmit 对自定义角色按权限和打开时的基线生成最小补丁。
+const handleSubmit = async () => {
+  if (!props.account) return
+  const candidate = buildUpdatePayload()
+  if (!candidate) return
+  const updatePayload = auth.isAdmin ? candidate : buildAccountRolePatch(initialUpdatePayload, candidate, auth.can)
+  const accountID = props.account.id
+  if (auth.isAdmin || 'group_ids' in updatePayload) {
     const canContinue = await ensureAntigravityMixedChannelConfirmed(async () => {
       await submitUpdateAccount(accountID, updatePayload)
     })
-    if (!canContinue) {
-      return
-    }
-
-    await submitUpdateAccount(accountID, updatePayload)
-  } catch (error: any) {
-    appStore.showError(error.message || t('admin.accounts.failedToUpdate'))
+    if (!canContinue) return
   }
+  await submitUpdateAccount(accountID, updatePayload)
 }
 
 // Handle mixed channel warning confirmation

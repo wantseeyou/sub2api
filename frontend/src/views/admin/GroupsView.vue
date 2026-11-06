@@ -93,7 +93,7 @@
                 </button>
               </div>
             </div>
-            <button
+            <button v-permission="'groups.update'"
               v-if="!authStore.isSimpleMode"
               @click="openSortModal"
               class="btn btn-secondary"
@@ -102,7 +102,7 @@
               <Icon name="arrowsUpDown" size="md" class="mr-2" />
               {{ t("admin.groups.sortOrder") }}
             </button>
-            <button
+            <button v-permission="'groups.create'"
               @click="openCreateModal"
               class="btn btn-primary"
               data-tour="groups-create-btn"
@@ -381,14 +381,14 @@
 
           <template #cell-actions="{ row }">
             <div class="flex items-center gap-1">
-              <button
+              <button v-permission="'groups.update'"
                 @click="handleEdit(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-gray-100 hover:text-primary-600 dark:hover:bg-dark-700 dark:hover:text-primary-400"
               >
                 <Icon name="edit" size="sm" />
                 <span class="text-xs">{{ t("common.edit") }}</span>
               </button>
-              <button
+              <button v-permission="'groups.execute'"
                 v-if="!authStore.isSimpleMode"
                 data-testid="group-duplicate"
                 :title="
@@ -409,7 +409,7 @@
                   }}
                 </span>
               </button>
-              <button
+              <button v-permission="'groups.read'"
                 v-if="!authStore.isSimpleMode && row.platform === 'composite'"
                 data-testid="group-composite-routes"
                 @click="handleCompositeRoutes(row)"
@@ -420,7 +420,7 @@
                   t("admin.groups.compositeRoutes.action")
                 }}</span>
               </button>
-              <button
+              <button v-permission="'groups.read'"
                 v-if="!authStore.isSimpleMode"
                 data-testid="group-rate-multipliers"
                 @click="handleRateMultipliers(row)"
@@ -431,7 +431,7 @@
                   t("admin.groups.rateMultipliers")
                 }}</span>
               </button>
-              <button
+              <button v-permission="'groups.read'"
                 v-if="!authStore.isSimpleMode"
                 data-testid="group-rpm-overrides"
                 @click="handleRPMOverrides(row)"
@@ -442,7 +442,7 @@
                   t("admin.groups.rpmOverrides")
                 }}</span>
               </button>
-              <button
+              <button v-permission="'groups.delete'"
                 @click="handleDelete(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
               >
@@ -453,7 +453,7 @@
           </template>
 
           <template #empty>
-            <EmptyState
+            <EmptyState v-permission="'groups.create'"
               :title="t('admin.groups.noGroupsYet')"
               :description="t('admin.groups.createFirstGroup')"
               :action-text="t('admin.groups.createGroup')"
@@ -482,7 +482,7 @@
       width="wide"
       @close="closeCreateModal"
     >
-      <form
+      <form v-permission="'groups.create'"
         id="create-group-form"
         @submit.prevent="handleCreateGroup"
         class="space-y-5"
@@ -2134,7 +2134,7 @@
       width="wide"
       @close="closeEditModal"
     >
-      <form
+      <form v-permission="'groups.update'"
         v-if="editingGroup"
         id="edit-group-form"
         @submit.prevent="handleUpdateGroup"

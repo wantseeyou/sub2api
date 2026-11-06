@@ -9,7 +9,7 @@
       </div>
 
       <!-- Settings Form -->
-      <form v-else @submit.prevent="saveSettings" class="space-y-6" novalidate>
+      <form v-else @submit.prevent="auth.can('settings.update') && saveSettings()" class="space-y-6" novalidate>
         <!-- Tab Navigation -->
         <div class="settings-tabs-shell">
           <nav
@@ -46,7 +46,7 @@
 
         <!-- Tab: Security — Admin API Key -->
         <div v-show="activeTab === 'security'" class="space-y-6">
-          <AdminAccessKeysSettings />
+          <AdminAccessKeysSettings v-if="auth.isAdmin" />
           <!-- 已有全权密钥只提供轮换和删除入口。 -->
           <details v-if="adminApiKeyExists" class="card">
             <summary class="cursor-pointer px-6 py-4 font-medium">{{ t("adminAccessKeys.legacy") }}</summary>
@@ -104,7 +104,7 @@
                     </code>
                   </div>
                   <div class="flex gap-2">
-                    <button
+                    <button v-permission="'builtin_admin'"
                       type="button"
                       @click="regenerateAdminApiKey"
                       :disabled="adminApiKeyOperating"
@@ -116,7 +116,7 @@
                           : t("admin.settings.adminApiKey.regenerate")
                       }}
                     </button>
-                    <button
+                    <button v-permission="'builtin_admin'"
                       type="button"
                       @click="deleteAdminApiKey"
                       :disabled="adminApiKeyOperating"
@@ -228,7 +228,7 @@
                 <div
                   class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700"
                 >
-                  <button
+                  <button v-permission="'settings.update'"
                     type="button"
                     @click="saveOverloadCooldownSettings"
                     :disabled="overloadCooldownSaving"
@@ -335,7 +335,7 @@
                 <div
                   class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700"
                 >
-                  <button
+                  <button v-permission="'settings.update'"
                     type="button"
                     @click="saveRateLimit429CooldownSettings"
                     :disabled="rateLimit429CooldownSaving"
@@ -515,7 +515,7 @@
                 <div
                   class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700"
                 >
-                  <button
+                  <button v-permission="'settings.update'"
                     type="button"
                     @click="saveStreamTimeoutSettings"
                     :disabled="streamTimeoutSaving"
@@ -717,7 +717,7 @@
                 <div
                   class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700"
                 >
-                  <button
+                  <button v-permission="'settings.update'"
                     type="button"
                     @click="saveRectifierSettings"
                     :disabled="rectifierSaving"
@@ -996,7 +996,7 @@
                 <div
                   class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700"
                 >
-                  <button
+                  <button v-permission="'settings.update'"
                     type="button"
                     @click="saveBetaPolicySettings"
                     :disabled="betaPolicySaving"
@@ -1956,7 +1956,7 @@
                 <div
                   class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700"
                 >
-                  <button
+                  <button v-permission="'settings.update'"
                     type="button"
                     data-testid="panel-rate-limit-save"
                     @click="savePanelRateLimitSettings"
@@ -4769,7 +4769,7 @@
                 <div
                   class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700"
                 >
-                  <button
+                  <button v-permission="'accounts.test'"
                     type="button"
                     class="btn btn-primary btn-sm"
                     :disabled="upstreamBillingProbeSaving"
@@ -4857,7 +4857,7 @@
                   </div>
                 </div>
                 <div class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700">
-                  <button
+                  <button v-permission="'accounts.update'"
                     type="button"
                     class="btn btn-primary btn-sm"
                     :disabled="ollamaCloudUsageSaving"
@@ -4941,7 +4941,7 @@
                   </div>
                 </div>
                 <div class="flex justify-end border-t border-gray-100 pt-4 dark:border-dark-700">
-                  <button
+                  <button v-permission="'accounts.update'"
                     type="button"
                     class="btn btn-primary btn-sm"
                     :disabled="opencodeGoUsageSaving"
@@ -6194,7 +6194,7 @@
                             : "∞"
                         }}</span
                       >
-                      <button
+                      <button v-permission="'settings.execute'"
                         v-if="(provider.quota_used ?? 0) > 0"
                         type="button"
                         class="text-xs text-primary-600 hover:text-primary-700"
@@ -6253,7 +6253,7 @@
                   "
                   @keyup.enter="testWebSearchProvider()"
                 />
-                <button
+                <button v-permission="'settings.execute'"
                   type="button"
                   class="btn btn-primary btn-sm"
                   :disabled="wsTestLoading"
@@ -7640,7 +7640,7 @@
                       {{ t('admin.settings.features.affiliate.customUsers.description') }}
                     </p>
                   </div>
-                  <button
+                  <button v-permission="'affiliates.update'"
                     type="button"
                     class="btn btn-primary btn-sm"
                     @click="openAffiliateModal(null)"
@@ -7657,7 +7657,7 @@
                     :placeholder="t('admin.settings.features.affiliate.customUsers.searchPlaceholder')"
                     @input="onAffiliateSearchInput"
                   />
-                  <button
+                  <button v-permission="'affiliates.execute'"
                     v-if="affiliateState.selected.length > 0"
                     type="button"
                     class="btn btn-secondary btn-sm"
@@ -7719,10 +7719,10 @@
                         </td>
                         <td class="px-3 py-2 text-sm">
                           <div class="flex items-center gap-2">
-                            <button type="button" class="text-primary-600 hover:underline" @click="openAffiliateModal(entry)">
+                            <button v-permission="'affiliates.update'" type="button" class="text-primary-600 hover:underline" @click="openAffiliateModal(entry)">
                               {{ t('common.edit') }}
                             </button>
-                            <button
+                            <button v-permission="'affiliates.delete'"
                               type="button"
                               class="text-red-600 hover:underline"
                               @click="askResetAffiliateUser(entry)"
@@ -8480,7 +8480,7 @@
 
           <!-- Provider Management -->
           <PaymentProviderList
-            v-if="form.payment_enabled"
+            v-if="form.payment_enabled && auth.can('payment.providers.read')"
             :providers="providers"
             :loading="providersLoading"
             :can-create="hasAnyPaymentTypeEnabled"
@@ -8511,7 +8511,7 @@
                   {{ t("admin.settings.smtp.description") }}
                 </p>
               </div>
-              <button
+              <button v-permission="'settings.execute'"
                 type="button"
                 @click="testSmtpConnection"
                 :disabled="testingSmtp || loadFailed"
@@ -8690,7 +8690,7 @@
                     "
                   />
                 </div>
-                <button
+                <button v-permission="'settings.execute'"
                   type="button"
                   @click="sendTestEmail"
                   :disabled="
@@ -8963,12 +8963,13 @@
 
         <!-- Tab: Backup -->
         <div v-show="activeTab === 'backup'">
-          <BackupSettings />
+          <BackupSettings v-if="auth.can('backups.read')" />
         </div>
 
         <!-- Save Button -->
         <div v-show="activeTab !== 'backup'" class="flex justify-end">
           <button
+            v-permission="'settings.update'"
             type="submit"
             :disabled="saving || loadFailed"
             class="btn btn-primary"
@@ -9121,6 +9122,7 @@ import { affiliatesAPI, type AffiliateAdminEntry, type SimpleUser as AffiliateSi
 import { extractApiErrorMessage, extractI18nErrorMessage } from "@/utils/apiError";
 import { useAppStore } from "@/stores";
 import { useAdminSettingsStore } from "@/stores/adminSettings";
+import { useAuthStore } from "@/stores/auth";
 import { normalizeVisibleMethod } from "@/components/payment/paymentFlow";
 import {
   isRegistrationEmailSuffixDomainValid,
@@ -9137,6 +9139,7 @@ import {
 
 const { t, locale } = useI18n();
 const appStore = useAppStore();
+const auth = useAuthStore();
 // 关闭 step-up 开关是敏感操作：后端返回 STEP_UP_REQUIRED 时弹 TOTP 码重试
 const settingsStepUp = useStepUp();
 const adminSettingsStore = useAdminSettingsStore();
@@ -10508,7 +10511,7 @@ async function loadWebSearchConfig() {
   try {
     const [resp, proxiesResp] = await Promise.all([
       adminAPI.settings.getWebSearchEmulationConfig(),
-      adminAPI.proxies.list().catch(() => ({ items: [] as Proxy[] })),
+      auth.can('proxies.read') ? adminAPI.proxies.list().catch(() => ({ items: [] as Proxy[] })) : Promise.resolve({ items: [] as Proxy[] }),
     ]);
     if (resp) {
       webSearchConfig.enabled = resp.enabled || false;
@@ -13035,18 +13038,20 @@ async function handleDeleteProvider() {
 
 onMounted(() => {
   loadSettings();
-  loadSubscriptionGroups();
-  loadAdminApiKey();
-  loadUpstreamBillingProbeSettings();
-  loadOllamaCloudUsageSettings();
-  loadOpenCodeGoUsageSettings();
+  if (auth.can('groups.read')) loadSubscriptionGroups();
+  if (auth.isAdmin) loadAdminApiKey();
+  if (auth.can('accounts.read')) {
+    loadUpstreamBillingProbeSettings();
+    loadOllamaCloudUsageSettings();
+    loadOpenCodeGoUsageSettings();
+  }
   loadOverloadCooldownSettings();
   loadRateLimit429CooldownSettings();
   loadPanelRateLimitSettings();
   loadStreamTimeoutSettings();
   loadRectifierSettings();
   loadBetaPolicySettings();
-  loadProviders();
+  if (auth.can('payment.providers.read')) loadProviders();
 });
 
 // =========================
@@ -13191,6 +13196,7 @@ function parseRebateRate(raw: unknown): number | null | undefined {
 }
 
 async function loadAffiliateUsers() {
+  if (!auth.can('affiliates.read')) return;
   affiliateState.loading = true;
   try {
     const res = await affiliatesAPI.listUsers({

@@ -70,6 +70,7 @@ export async function list(
   filters?: {
     status?: 'active' | 'disabled'
     role?: 'admin' | 'user'
+    admin_role_id?: number
     search?: string
     group_name?: string         // fuzzy filter by allowed group name
     api_key_group_id?: number   // filter users by the group their API keys are bound to
@@ -88,6 +89,7 @@ export async function list(
     page_size: pageSize,
     status: filters?.status,
     role: filters?.role,
+    admin_role_id: filters?.admin_role_id,
     search: filters?.search,
     group_name: filters?.group_name,
     api_key_group_id: filters?.api_key_group_id,
@@ -134,6 +136,7 @@ export async function create(userData: {
   username?: string
   notes?: string
   role?: 'admin' | 'user'
+  admin_role_id?: number
   balance?: number
   concurrency?: number
   rpm_limit?: number

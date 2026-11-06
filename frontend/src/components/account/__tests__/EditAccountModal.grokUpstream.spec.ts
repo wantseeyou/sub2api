@@ -58,7 +58,7 @@ vi.mock('@/stores/app', () => ({
 }))
 
 vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({
+  useAuthStore: () => ({ isAdmin: true, can: () => true,
     get isSimpleMode() {
       return authIsSimpleMode.value
     }

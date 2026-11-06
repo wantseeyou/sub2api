@@ -20,6 +20,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/adminaccess"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
@@ -2561,6 +2562,18 @@ func (h *AccountHandler) GetUsage(c *gin.Context) {
 		return
 	}
 
+	if role := adminaccess.RoleFromContext(c.Request.Context()); role != nil && !role.Allows("accounts.test") {
+		usage, failures, err := h.accountUsageService.GetStoredUsageBatch(c.Request.Context(), []int64{accountID})
+		if response.ErrorFrom(c, err) {
+			return
+		}
+		if failures[accountID] != "" {
+			response.NotFound(c, "Account not found")
+			return
+		}
+		response.Success(c, usage[accountID])
+		return
+	}
 	source := c.DefaultQuery("source", "active")
 	force := c.Query("force") == "true"
 
@@ -2760,7 +2773,14 @@ func (h *AccountHandler) GetBatchUsage(c *gin.Context) {
 		return
 	}
 
-	usageByAccount, errorsByAccount, err := h.accountUsageService.GetUsageBatch(c.Request.Context(), accountIDs, req.Force)
+	var usageByAccount map[int64]*service.UsageInfo
+	var errorsByAccount map[int64]string
+	var err error
+	if role := adminaccess.RoleFromContext(c.Request.Context()); role != nil && !role.Allows("accounts.test") {
+		usageByAccount, errorsByAccount, err = h.accountUsageService.GetStoredUsageBatch(c.Request.Context(), accountIDs)
+	} else {
+		usageByAccount, errorsByAccount, err = h.accountUsageService.GetUsageBatch(c.Request.Context(), accountIDs, req.Force)
+	}
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -2824,7 +2844,8 @@ func (h *AccountHandler) respondAvailableModels(c *gin.Context, account *service
 	if account.IsOpenAI() {
 		// Prefer the shared, account-keyed upstream catalog. If discovery fails,
 		// retain the legacy local catalog below so the test dialog remains usable.
-		if h.accountTestService != nil {
+		role := adminaccess.RoleFromContext(c.Request.Context())
+		if h.accountTestService != nil && (role == nil || role.Allows("accounts.test")) {
 			if models, fetchErr := h.accountTestService.FetchOpenAIAccountModels(c.Request.Context(), account); fetchErr == nil {
 				response.Success(c, models)
 				return

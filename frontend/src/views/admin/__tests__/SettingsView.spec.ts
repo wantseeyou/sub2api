@@ -129,6 +129,8 @@ vi.mock("@/stores", () => ({
   }),
 }));
 
+vi.mock("@/stores/auth", () => ({ useAuthStore: () => ({ isAdmin: true, can: () => true }) }));
+
 vi.mock("@/stores/adminSettings", () => ({
   useAdminSettingsStore: () => ({
     fetch: adminSettingsFetch,

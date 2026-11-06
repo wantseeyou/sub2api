@@ -213,7 +213,7 @@ func validateJWTForAdmin(
 	}
 
 	// 检查管理员权限
-	if !user.IsAdmin() {
+	if !user.HasAdminAccess() {
 		AbortWithError(c, 403, "FORBIDDEN", "Admin access required")
 		return false
 	}
@@ -226,6 +226,11 @@ func validateJWTForAdmin(
 	c.Set(ContextKeyAuthEmail, user.Email)
 	c.Set(ContextKeySessionID, claims.SessionID)
 	c.Set("auth_method", "jwt")
+	if !user.IsAdmin() {
+		role := user.AdminRole
+		c.Request = c.Request.WithContext(adminaccess.WithRole(c.Request.Context(), &adminaccess.RoleAccess{ID: role.ID, Name: role.Name, Permissions: role.Permissions}))
+		return authorizeRoleRequest(c, userService)
+	}
 
 	return true
 }

@@ -25,6 +25,7 @@ func RegisterAdminRoutes(
 
 	admin := v1.Group("/admin")
 	admin.Use(gin.HandlerFunc(adminAuth))
+	admin.Use(middleware.AdminRoleResponses())
 	// 面板全局按用户限流（默认管理员豁免，可在系统设置中关闭豁免）
 	admin.Use(panelRateLimiter.Global())
 	// 审计中间件挂在认证之后：所有管理面变更类操作 + 敏感读取入审计日志
@@ -38,6 +39,14 @@ func RegisterAdminRoutes(
 
 		// 仪表盘
 		registerDashboardRoutes(admin, h)
+
+		// 后台角色管理仅允许内置管理员的 JWT 会话。
+		roles := admin.Group("/roles", h.Admin.Role.RequireAdministrator)
+		roles.GET("", h.Admin.Role.List)
+		roles.GET("/permissions", h.Admin.Role.Permissions)
+		roles.POST("", h.Admin.Role.Save)
+		roles.PUT("/:id", h.Admin.Role.Save)
+		roles.DELETE("/:id", h.Admin.Role.Delete)
 
 		// 用户管理
 		registerUserManagementRoutes(admin, h)
@@ -302,10 +311,6 @@ func registerDashboardRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 func registerUserManagementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	users := admin.Group("/users")
 	{
-		if h.GroupView != nil {
-			users.GET("/:id/group-view-grants", h.GroupView.GetGrants)
-			users.PUT("/:id/group-view-grants", h.GroupView.SetGrants)
-		}
 		users.GET("", h.Admin.User.List)
 		users.GET("/:id", h.Admin.User.GetByID)
 		users.POST("/:id/auth-identities", h.Admin.User.BindAuthIdentity)
@@ -404,6 +409,8 @@ func registerAccountRoutes(admin *gin.RouterGroup, h *handler.Handlers, stepUpAu
 		accounts.POST("/:id/recover-state", h.Admin.Account.RecoverState)
 		accounts.POST("/:id/refresh", h.Admin.Account.Refresh)
 		accounts.POST("/:id/apply-oauth-credentials", h.Admin.Account.ApplyOAuthCredentials)
+		accounts.POST("/:id/reauthorize", h.Admin.AccountReauthorize.Reauthorize)
+		accounts.POST("/:id/reauthorize/auth-url", h.Admin.AccountReauthorize.GenerateAuthURL)
 		accounts.POST("/:id/set-privacy", h.Admin.Account.SetPrivacy)
 		accounts.POST("/:id/refresh-tier", h.Admin.Account.RefreshTier)
 		accounts.GET("/:id/stats", h.Admin.Account.GetStats)

@@ -159,7 +159,7 @@
             >
               <Icon name="questionCircle" size="md" />
             </button>
-            <button @click="showAssignModal = true" class="btn btn-primary">
+            <button v-permission="'subscriptions.assign'" @click="showAssignModal = true" class="btn btn-primary">
               <Icon name="plus" size="md" class="mr-2" />
               {{ t('admin.subscriptions.assignSubscription') }}
             </button>
@@ -174,7 +174,7 @@
             <span class="mr-2 text-sm font-medium text-primary-800 dark:text-primary-200">
               {{ t('admin.subscriptions.bulk.selected', { count: selectedCount }) }}
             </span>
-            <button
+            <button v-permission="'subscriptions.execute'"
               v-for="action in bulkActions"
               :key="action"
               type="button"
@@ -418,7 +418,7 @@
 
           <template #cell-actions="{ row }">
             <div class="flex items-center gap-1">
-              <button
+              <button v-permission="'subscriptions.extend'"
                 v-if="row.status === 'active' || row.status === 'expired'"
                 @click="handleExtend(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20 dark:hover:text-blue-400"
@@ -426,7 +426,7 @@
                 <Icon name="calendar" size="sm" />
                 <span class="text-xs">{{ t('admin.subscriptions.adjust') }}</span>
               </button>
-              <button
+              <button v-permission="'subscriptions.reset'"
                 v-if="row.status === 'active'"
                 @click="handleResetQuota(row)"
                 :disabled="resettingQuota && resettingSubscription?.id === row.id"
@@ -435,7 +435,7 @@
                 <Icon name="refresh" size="sm" />
                 <span class="text-xs">{{ t('admin.subscriptions.resetQuota') }}</span>
               </button>
-              <button
+              <button v-permission="'subscriptions.revoke'"
                 v-if="row.status === 'active'"
                 @click="handleRevoke(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/20 dark:hover:text-red-400"
@@ -443,7 +443,7 @@
                 <Icon name="ban" size="sm" />
                 <span class="text-xs">{{ t('admin.subscriptions.revoke') }}</span>
               </button>
-              <button
+              <button v-permission="'subscriptions.restore'"
                 v-if="row.status === 'revoked'"
                 @click="handleRestore(row)"
                 class="flex flex-col items-center gap-0.5 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400"
@@ -455,7 +455,7 @@
           </template>
 
           <template #empty>
-            <EmptyState
+            <EmptyState v-permission="'subscriptions.assign'"
               :title="t('admin.subscriptions.noSubscriptionsYet')"
               :description="t('admin.subscriptions.assignFirstSubscription')"
               :action-text="t('admin.subscriptions.assignSubscription')"
@@ -496,7 +496,7 @@
       :close-on-escape="!submitting"
       @close="closeAssignModal"
     >
-      <form
+      <form v-permission="'subscriptions.assign'"
         id="assign-subscription-form"
         @submit.prevent="handleAssignSubscription"
         class="space-y-5"
@@ -663,7 +663,7 @@
       width="narrow"
       @close="closeExtendModal"
     >
-      <form
+      <form v-permission="'subscriptions.extend'"
         v-if="extendingSubscription"
         id="extend-subscription-form"
         @submit.prevent="handleExtendSubscription"

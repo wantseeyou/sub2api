@@ -14,6 +14,8 @@ const authStore = vi.hoisted(() => ({
   checkAuth: vi.fn(),
   isAuthenticated: true,
   isAdmin: false,
+  get canAccessAdmin() { return this.isAdmin },
+  get user() { return this.isAdmin ? { role: 'admin' } : { role: 'user' } },
   isSimpleMode: false,
   hasPendingAuthSession: false,
 }))

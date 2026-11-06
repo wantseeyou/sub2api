@@ -60,6 +60,7 @@ func NewUserHandler(
 
 // CreateUserRequest represents admin create user request
 type CreateUserRequest struct {
+	AdminRoleID          *int64   `json:"admin_role_id" binding:"omitempty,min=0"` // 自定义角色标识。
 	Email                string   `json:"email" binding:"required,email"`
 	Password             string   `json:"password" binding:"required,min=6"`
 	Username             string   `json:"username"`
@@ -75,6 +76,7 @@ type CreateUserRequest struct {
 // UpdateUserRequest represents admin update user request
 // 使用指针类型来区分"未提供"和"设置为0"
 type UpdateUserRequest struct {
+	AdminRoleID          *int64   `json:"admin_role_id" binding:"omitempty,min=0"` // 自定义角色标识，零表示清除。
 	Email                string   `json:"email" binding:"omitempty,email"`
 	Password             string   `json:"password" binding:"omitempty,min=6"`
 	Username             *string  `json:"username"`
@@ -144,6 +146,14 @@ func (h *UserHandler) List(c *gin.Context) {
 		if id, parseErr := strconv.ParseInt(raw, 10, 64); parseErr == nil && id > 0 {
 			filters.APIKeyGroupID = id
 		}
+	}
+	if raw, ok := c.GetQuery("admin_role_id"); ok {
+		id, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || id < 0 {
+			response.BadRequest(c, "角色标识无效")
+			return
+		}
+		filters.AdminRoleID = &id
 	}
 	sortBy := c.DefaultQuery("sort_by", "created_at")
 	sortOrder := c.DefaultQuery("sort_order", "desc")
@@ -293,14 +303,18 @@ func (h *UserHandler) Create(c *gin.Context) {
 		return
 	}
 
+	if req.AdminRoleID != nil && *req.AdminRoleID > 0 && !requireRoleAssignmentAdministrator(c) {
+		return
+	}
 	// 创建管理员账号属权限敏感操作：需最近完成 step-up 2FA 验证。
-	if req.Role == service.RoleAdmin {
+	if req.Role == service.RoleAdmin || (req.AdminRoleID != nil && *req.AdminRoleID > 0) {
 		if !middleware.EnforceStepUp(c, h.totpService, h.userService, h.settingService) {
 			return
 		}
 	}
 
 	user, err := h.adminService.CreateUser(c.Request.Context(), &service.CreateUserInput{
+		AdminRoleID:          req.AdminRoleID,
 		Email:                req.Email,
 		Password:             req.Password,
 		Username:             req.Username,
@@ -359,7 +373,16 @@ func (h *UserHandler) Update(c *gin.Context) {
 	}
 
 	// 使用指针类型直接传递，nil 表示未提供该字段
+	if req.AdminRoleID != nil {
+		if !requireRoleAssignmentAdministrator(c) {
+			return
+		}
+		if !middleware.EnforceStepUp(c, h.totpService, h.userService, h.settingService) {
+			return
+		}
+	}
 	user, err := h.adminService.UpdateUser(c.Request.Context(), userID, &service.UpdateUserInput{
+		AdminRoleID:          req.AdminRoleID,
 		Email:                req.Email,
 		Password:             req.Password,
 		Username:             req.Username,
@@ -1006,4 +1029,14 @@ func (h *UserHandler) ResetUserPlatformQuotaWindow(c *gin.Context) {
 		out = append(out, quotaview.LazyZeroQuotaForResponse(records[i], now, true))
 	}
 	response.Success(c, map[string]any{"platform_quotas": out})
+}
+
+// requireRoleAssignmentAdministrator 将后台角色分配限定为管理员的登录会话。
+func requireRoleAssignmentAdministrator(c *gin.Context) bool {
+	role, _ := middleware.GetUserRoleFromContext(c)
+	if role != service.RoleAdmin || c.GetString("auth_method") != "jwt" {
+		response.Forbidden(c, "只有登录的管理员可分配后台角色")
+		return false
+	}
+	return true
 }

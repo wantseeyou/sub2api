@@ -10,19 +10,21 @@ import (
 )
 
 type User struct {
-	ID            int64      `json:"id"`
-	Email         string     `json:"email"`
-	Username      string     `json:"username"`
-	Role          string     `json:"role"`
-	Balance       float64    `json:"balance"`
-	FrozenBalance float64    `json:"frozen_balance"`
-	Concurrency   int        `json:"concurrency"`
-	Status        string     `json:"status"`
-	AllowedGroups []int64    `json:"allowed_groups"`
-	LastActiveAt  *time.Time `json:"last_active_at,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
-	DeletedAt     *time.Time `json:"deleted_at,omitempty"`
+	ID            int64              `json:"id"`
+	Email         string             `json:"email"`
+	Username      string             `json:"username"`
+	Role          string             `json:"role"`
+	AdminRoleID   *int64             `json:"admin_role_id"`        // 自定义后台角色标识。
+	AdminRole     *service.AdminRole `json:"admin_role,omitempty"` // 当前用户的后台角色和权限。
+	Balance       float64            `json:"balance"`
+	FrozenBalance float64            `json:"frozen_balance"`
+	Concurrency   int                `json:"concurrency"`
+	Status        string             `json:"status"`
+	AllowedGroups []int64            `json:"allowed_groups"`
+	LastActiveAt  *time.Time         `json:"last_active_at,omitempty"`
+	CreatedAt     time.Time          `json:"created_at"`
+	UpdatedAt     time.Time          `json:"updated_at"`
+	DeletedAt     *time.Time         `json:"deleted_at,omitempty"`
 
 	// 余额不足通知
 	BalanceNotifyEnabled       bool               `json:"balance_notify_enabled"`

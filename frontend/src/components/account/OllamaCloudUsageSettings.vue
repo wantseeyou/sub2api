@@ -56,11 +56,13 @@
       <div>
         <label class="input-label" for="ollama-cloud-session">{{ t('admin.accounts.ollamaCloud.sessionLabel') }}</label>
         <textarea
+          v-permission.disable="'accounts.update'"
           id="ollama-cloud-session"
           v-model="session"
           rows="3"
           class="input font-mono text-xs"
           autocomplete="new-password"
+          :disabled="!auth.can('accounts.update')"
           data-1p-ignore
           data-lpignore="true"
           data-bwignore="true"
@@ -71,9 +73,10 @@
 
       <div class="flex flex-wrap items-center gap-2">
         <button
+          v-permission.disable="'accounts.update'"
           type="button"
           class="btn btn-primary btn-sm"
-          :disabled="saving || !session.trim() || !state.encryption_key_configured"
+          :disabled="saving || !session.trim() || !state.encryption_key_configured || !auth.can('accounts.update')"
           data-testid="ollama-cloud-session-save"
           @click="saveSession"
         >
@@ -81,10 +84,11 @@
           {{ t('common.save') }}
         </button>
         <button
+          v-permission.disable="'accounts.delete'"
           v-if="state.configured"
           type="button"
           class="btn btn-secondary btn-sm text-red-600 dark:text-red-400"
-          :disabled="saving"
+          :disabled="saving || !auth.can('accounts.delete')"
           data-testid="ollama-cloud-session-delete"
           @click="showDeleteConfirm = true"
         >
@@ -92,10 +96,11 @@
           {{ t('admin.accounts.ollamaCloud.deleteSession') }}
         </button>
         <button
+          v-permission.disable="'accounts.refresh'"
           v-if="state.configured"
           type="button"
           class="btn btn-secondary btn-sm"
-          :disabled="refreshing"
+          :disabled="refreshing || !auth.can('accounts.refresh')"
           data-testid="ollama-cloud-refresh"
           @click="refreshUsage"
         >
@@ -114,8 +119,9 @@
           </p>
         </div>
         <Toggle
+          v-permission.disable="'accounts.refresh'"
           :model-value="state.auto_refresh_enabled"
-          :disabled="saving"
+          :disabled="saving || !auth.can('accounts.refresh')"
           data-testid="ollama-cloud-auto-refresh"
           @update:model-value="setAutoRefresh"
         />
@@ -140,6 +146,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { adminAPI } from '@/api/admin'
 import { useAppStore } from '@/stores/app'
+import { useAuthStore } from '@/stores/auth'
 import { extractApiErrorMessage, extractI18nErrorMessage } from '@/utils/apiError'
 import type { Account, OllamaCloudUsageState, OllamaCloudUsageWindow } from '@/types'
 import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
@@ -150,6 +157,7 @@ const props = defineProps<{ account: Account }>()
 const emit = defineEmits<{ updated: [state: OllamaCloudUsageState] }>()
 const { t } = useI18n()
 const appStore = useAppStore()
+const auth = useAuthStore()
 const state = ref<OllamaCloudUsageState | null>(props.account.ollama_cloud_usage ?? null)
 const session = ref('')
 const loading = ref(false)
@@ -203,7 +211,7 @@ const load = async () => {
 }
 
 const saveSession = async () => {
-  if (!session.value.trim()) return
+  if (!auth.can('accounts.update') || !session.value.trim()) return
   saving.value = true
   try {
     applyState(await adminAPI.accounts.saveOllamaCloudUsageSession(props.account.id, session.value))
@@ -217,6 +225,7 @@ const saveSession = async () => {
 }
 
 const deleteSession = async () => {
+  if (!auth.can('accounts.delete')) return
   saving.value = true
   showDeleteConfirm.value = false
   try {
@@ -231,6 +240,7 @@ const deleteSession = async () => {
 }
 
 const setAutoRefresh = async (enabled: boolean) => {
+  if (!auth.can('accounts.refresh')) return
   saving.value = true
   try {
     applyState(await adminAPI.accounts.setOllamaCloudUsageAutoRefresh(props.account.id, enabled))
@@ -242,6 +252,7 @@ const setAutoRefresh = async (enabled: boolean) => {
 }
 
 const refreshUsage = async () => {
+  if (!auth.can('accounts.refresh')) return
   refreshing.value = true
   try {
     applyState(await adminAPI.accounts.refreshOllamaCloudUsage(props.account.id))

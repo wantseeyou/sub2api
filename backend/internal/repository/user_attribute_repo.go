@@ -219,6 +219,9 @@ func (r *userAttributeValueRepository) UpsertBatch(ctx context.Context, userID i
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	if err := guardRoleUserMutation(ctx, tx.Client(), userID); err != nil {
+		return err
+	}
 	for _, input := range inputs {
 		// Use upsert (ON CONFLICT DO UPDATE)
 		err := tx.UserAttributeValue.Create().
