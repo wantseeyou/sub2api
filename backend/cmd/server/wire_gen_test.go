@@ -83,6 +83,8 @@ func TestProvideCleanup_WithMinimalDependencies_NoPanic(t *testing.T) {
 		service.NewXtuisPushService(nil, nil, nil),
 		billingCacheSvc,
 		&service.UsageRecordWorkerPool{},
+		service.ProvideBalanceNotifyService(nil, nil, nil, nil, nil),
+		service.NewDigestSessionStore(),
 		&service.SubscriptionService{},
 		oauthSvc,
 		openAIOAuthSvc,
