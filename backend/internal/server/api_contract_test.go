@@ -53,6 +53,7 @@ func TestAPIContracts(t *testing.T) {
 					"email_bound": true,
 					"username": "alice",
 						"role": "user",
+						"admin_role_id": null,
 						"balance": 12.5,
 						"frozen_balance": 0,
 						"concurrency": 5,

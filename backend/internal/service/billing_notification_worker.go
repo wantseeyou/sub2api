@@ -17,8 +17,8 @@ const (
 )
 
 // Notification work is best effort and must not create an unbounded queue or
-// compete with committed-charge persistence for usage workers. A task includes
-// both settings reads and email delivery, including all quota dimensions.
+// compete with committed-charge persistence for usage workers. Each task handles
+// settings reads and delivery for one notification type.
 type usageNotificationWorker struct {
 	pool        pond.Pool
 	ctx         context.Context
@@ -77,21 +77,23 @@ func (w *usageNotificationWorker) stop() {
 	})
 }
 
+// submitUsageNotifications 分别提交余额与限额通知，避免慢邮件耗尽另一类通知的时间预算。
 func (s *BalanceNotifyService) submitUsageNotifications(p *postUsageBillingParams, deps *billingDeps, result *UsageBillingApplyResult) {
 	if s == nil || s.usageNotifications == nil || p == nil || p.Cost == nil {
 		return
 	}
 	balanceEnabled := !p.IsSubscriptionBill && p.Cost.ActualCost > 0 && s.canNotifyBalance(p.User)
 	quotaEnabled := p.Cost.TotalCost > 0 && p.Account != nil && p.Account.SupportsAccountQuota() && p.Account.HasAnyQuotaLimit()
-	if !balanceEnabled && !quotaEnabled {
-		return
+	if balanceEnabled {
+		s.usageNotifications.submit(func(ctx context.Context) {
+			notifyBalanceLow(ctx, p, deps, result)
+		})
 	}
-	s.usageNotifications.submit(func(ctx context.Context) {
-		notifyBalanceLow(ctx, p, deps, result)
-		if ctx.Err() == nil {
+	if quotaEnabled {
+		s.usageNotifications.submit(func(ctx context.Context) {
 			notifyAccountQuota(ctx, p, deps, result)
-		}
-	})
+		})
+	}
 }
 
 // Stop cancels notification work and waits for the bounded workers to exit.

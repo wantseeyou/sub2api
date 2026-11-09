@@ -468,7 +468,7 @@ func testConnectionHandleError(
 }
 
 // buildGeminiTestRequestWithPrompt 构建 Gemini 格式测试请求
-// 文本模型使用传入提示词，未传入时保留探测默认值 "."；图片模型使用图片生成配置。
+// 文本模型使用传入提示词，未传入时使用默认值 "hi"；图片模型使用图片生成配置。
 func (s *AntigravityGatewayService) buildGeminiTestRequestWithPrompt(projectID, model, prompt string) ([]byte, error) {
 	if isImageGenerationModel(model) {
 		imagePrompt := strings.TrimSpace(prompt)
@@ -500,10 +500,6 @@ func (s *AntigravityGatewayService) buildGeminiTestRequestWithPrompt(projectID, 
 		return s.wrapV1InternalRequest(projectID, model, payloadBytes)
 	}
 
-	prompt = strings.TrimSpace(prompt)
-	if prompt == "" {
-		prompt = "."
-	}
 	payload := map[string]any{
 		"contents": []map[string]any{
 			{

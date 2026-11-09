@@ -249,7 +249,7 @@ func (h *AccountReauthorizeHandler) Reauthorize(c *gin.Context) {
 // validate 校验各平台允许的授权方式及最少必要输入。
 func (r *AccountReauthorizeRequest) validate(account *service.Account) error {
 	if r.Type != service.AccountTypeOAuth && r.Type != service.AccountTypeSetupToken {
-		return fmt.Errorf("Invalid OAuth account type")
+		return fmt.Errorf("invalid OAuth account type")
 	}
 	if account.Platform != service.PlatformAnthropic && r.Type != account.Type {
 		return fmt.Errorf("OAuth account type cannot be changed for this platform")
@@ -275,7 +275,7 @@ func (r *AccountReauthorizeRequest) validate(account *service.Account) error {
 			return fmt.Errorf("sso authorization requires a Grok account and sso_token")
 		}
 	default:
-		return fmt.Errorf("Invalid authorization method")
+		return fmt.Errorf("invalid authorization method")
 	}
 	return nil
 }

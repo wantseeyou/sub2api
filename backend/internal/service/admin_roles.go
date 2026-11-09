@@ -2,7 +2,10 @@ package service
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -130,7 +133,11 @@ func (s *AdminRoleService) Delete(ctx context.Context, id int64) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			slog.ErrorContext(ctx, "admin_role_delete_rollback_failed", "role_id", id, "error", err)
+		}
+	}()
 	count, err := tx.User.Query().Where(user.AdminRoleIDEQ(id)).Count(ctx)
 	if err != nil {
 		return err

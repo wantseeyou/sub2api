@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -587,7 +588,11 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 		if err != nil {
 			return nil, err
 		}
-		defer tx.Rollback()
+		defer func() {
+			if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+				slog.ErrorContext(ctx, "admin_account_update_rollback_failed", "account_id", id, "error", err)
+			}
+		}()
 		updated, err := s.UpdateAccount(dbent.NewTxContext(ctx, tx), id, input)
 		if err != nil {
 			return nil, err

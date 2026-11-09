@@ -1514,7 +1514,7 @@
               </div>
 
               <!-- Exact Email Blacklist -->
-              <RegistrationEmailBlacklistEditor />
+              <RegistrationEmailBlacklistEditor v-if="auth.isAdmin" />
 
               <!-- Promo Code -->
               <div

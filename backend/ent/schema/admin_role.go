@@ -1,12 +1,12 @@
 package schema
 
 import (
-	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/entsql"
 	"entgo.io/ent/schema"
 	"entgo.io/ent/schema/edge"
 	"entgo.io/ent/schema/field"
+	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
 )
 
 // AdminRole 保存可分配给站内用户的后台角色。
