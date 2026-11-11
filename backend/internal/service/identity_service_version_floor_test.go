@@ -57,7 +57,7 @@ func TestGetOrCreateFingerprintFloorsStaleCachedUserAgent(t *testing.T) {
 	require.Equal(t, "claude-cli/"+claude.CLICurrentVersion+" (external, cli)", cache.lastSet.UserAgent)
 	// 迁移时 SDK 与运行时一起更新，不拼接旧缓存环境。
 	require.Equal(t, "0.128.0", fp.StainlessPackageVersion)
-	require.Equal(t, "v26.3.0", fp.StainlessRuntimeVersion)
+	require.Equal(t, "v26.12.1", fp.StainlessRuntimeVersion)
 	require.Equal(t, "cid-1", fp.ClientID)
 }
 

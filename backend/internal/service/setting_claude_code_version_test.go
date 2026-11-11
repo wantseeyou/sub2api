@@ -18,8 +18,8 @@ func TestGetClaudeCodeClientVersionPriority(t *testing.T) {
 		synced string
 		want   string
 	}{
-		{name: "手动值优先", manual: "2.1.299", synced: "2.1.281", want: "2.1.299"},
-		{name: "归一化手动值", manual: " v2.1.299 ", synced: "2.1.281", want: "2.1.299"},
+		{name: "手动值优先", manual: "2.1.321", synced: "2.1.281", want: "2.1.321"},
+		{name: "归一化手动值", manual: " v2.1.321 ", synced: "2.1.281", want: "2.1.321"},
 		{name: "旧同步值回退固定版本", synced: "2.1.281", want: claude.CLICurrentVersion},
 		{name: "无效手动值回退", manual: "invalid", synced: "2.1.281", want: claude.CLICurrentVersion},
 		{name: "无效同步值回退", synced: "2.1.9", want: claude.CLIVersion()},
@@ -47,11 +47,11 @@ func TestUpdateSettingsClaudeCodeVersionTakesEffectImmediately(t *testing.T) {
 	require.Equal(t, claude.CLICurrentVersion, svc.GetClaudeCodeClientVersion(ctx))
 
 	settings := &SystemSettings{
-		ClaudeCodeClientVersion:          "2.1.299",
+		ClaudeCodeClientVersion:          "2.1.321",
 		ClaudeCodeVersionAutoSyncEnabled: true,
 	}
 	require.NoError(t, svc.UpdateSettings(ctx, settings))
-	require.Equal(t, "2.1.299", svc.GetClaudeCodeClientVersion(ctx), "保存手动版本后应立即生效")
+	require.Equal(t, "2.1.321", svc.GetClaudeCodeClientVersion(ctx), "保存手动版本后应立即生效")
 	require.NotContains(t, repo.updates, SettingKeyClaudeCodeClientVersionSynced)
 	require.Equal(t, "2.1.281", repo.values[SettingKeyClaudeCodeClientVersionSynced])
 

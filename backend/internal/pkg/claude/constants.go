@@ -82,7 +82,7 @@ const APIKeyHaikuBetaHeader = BetaInterleavedThinking
 const DefaultCacheControlTTL = "5m"
 
 // CLICurrentVersion 固定出站 Claude Code 版本，升级时必须同时验证 SDK、运行时与请求格式。
-const CLICurrentVersion = "2.1.299"
+const CLICurrentVersion = "2.1.321"
 
 // FullClaudeCodeMimicryBetas 返回最"像"真实 Claude Code CLI 的完整 beta 列表，
 // 用于 OAuth 账号伪装成 Claude Code 时使用。
@@ -107,7 +107,7 @@ func FullClaudeCodeMimicryBetas() []string {
 	}
 }
 
-// DefaultHeaders 返回固定版本的环境头部；SDK 与运行时取自 2.1.299 macOS ARM64 原生版回环样本。
+// DefaultHeaders 返回固定版本的环境头部；SDK 与运行时取自 2.1.321 macOS ARM64 原生版回环样本。
 // cli 表示网关采用的入口；样本的 --print / sdk-cli 入口不作为通用默认值。
 func DefaultHeaders() map[string]string {
 	return map[string]string{
@@ -117,7 +117,7 @@ func DefaultHeaders() map[string]string {
 		"X-Stainless-OS":                            "MacOS",
 		"X-Stainless-Arch":                          "arm64",
 		"X-Stainless-Runtime":                       "node",
-		"X-Stainless-Runtime-Version":               "v26.3.0",
+		"X-Stainless-Runtime-Version":               "v26.12.1",
 		"X-Stainless-Retry-Count":                   "0",
 		"X-Stainless-Timeout":                       "600",
 		"X-App":                                     "cli",
@@ -135,6 +135,18 @@ type Model struct {
 
 // DefaultModels Claude Code 客户端支持的默认模型列表
 var DefaultModels = []Model{
+	{
+		ID:          "claude-fable-5-2",
+		Type:        "model",
+		DisplayName: "Claude Fable 5.2",
+		CreatedAt:   "2026-11-09T00:00:00Z",
+	},
+	{
+		ID:          "claude-mythos-5-2",
+		Type:        "model",
+		DisplayName: "Claude Mythos 5.2",
+		CreatedAt:   "2026-11-09T00:00:00Z",
+	},
 	{
 		ID:          "claude-fable-5-1",
 		Type:        "model",

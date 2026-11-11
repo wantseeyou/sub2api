@@ -9,7 +9,7 @@ func TestIsSupportedCLIVersion(t *testing.T) {
 		want    bool
 	}{
 		{"内置基线本身", CLICurrentVersion, true},
-		{"未适配的补丁版本", "2.1.300", false},
+		{"未适配的补丁版本", "2.1.322", false},
 		{"高于基线的次版本", "2.2.0", false},
 		{"高于基线的主版本", "3.0.0", false},
 		{"低于基线", "2.1.219", false},
