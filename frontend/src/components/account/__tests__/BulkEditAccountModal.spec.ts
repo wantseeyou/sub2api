@@ -287,8 +287,7 @@ describe('BulkEditAccountModal', () => {
     expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledTimes(1)
     expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledWith([1, 2], {
       extra: {
-        openai_passthrough: true,
-        openai_passthrough_model_filter: false
+        openai_passthrough: true
       }
     })
   })
@@ -907,13 +906,12 @@ describe('BulkEditAccountModal', () => {
     expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledWith([1, 2], {
       extra: {
         openai_passthrough: false,
-        openai_passthrough_model_filter: false,
         openai_oauth_passthrough: false
       }
     })
   })
 
-  it('开启 OpenAI 自动透传时不再同时提交模型限制', async () => {
+  it('开启 OpenAI 自动透传时仍可同时提交模型限制', async () => {
     const wrapper = mountModal({
       selectedPlatforms: ['openai'],
       selectedTypes: ['oauth']
@@ -927,26 +925,25 @@ describe('BulkEditAccountModal', () => {
 
     expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledTimes(1)
     expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledWith([1, 2], {
+      credentials: { model_mapping: {} },
       extra: {
-        openai_passthrough: true,
-        openai_passthrough_model_filter: false
+        openai_passthrough: true
       }
     })
-    expect(wrapper.text()).toContain('admin.accounts.openai.modelRestrictionDisabledByPassthrough')
+    expect(wrapper.text()).toContain('admin.accounts.openai.modelRestrictionPassthroughHint')
   })
 
-  it('can bulk-enable passthrough model filtering and submit an explicit whitelist', async () => {
+  it('submits an explicit model whitelist with bulk passthrough', async () => {
     const wrapper = mountModal({ selectedPlatforms: ['openai'], selectedTypes: ['apikey'] })
     await wrapper.get('#bulk-edit-openai-passthrough-enabled').setValue(true)
     await wrapper.get('#bulk-edit-openai-passthrough-toggle').trigger('click')
-    await wrapper.get('[data-testid="bulk-openai-passthrough-model-filter"]').setValue(true)
     await wrapper.get('#bulk-edit-model-restriction-enabled').setValue(true)
     wrapper.findComponent({ name: 'ModelWhitelistSelector' }).vm.$emit('update:modelValue', ['qwen3.8-max'])
     await wrapper.get('#bulk-edit-account-form').trigger('submit.prevent')
     await flushPromises()
 
     expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledWith([1, 2], {
-      extra: { openai_passthrough: true, openai_passthrough_model_filter: true },
+      extra: { openai_passthrough: true },
       credentials: { model_mapping: { 'qwen3.8-max': 'qwen3.8-max' } }
     })
   })

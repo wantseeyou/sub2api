@@ -50,12 +50,12 @@ func TestOpenAIPassthroughModelFilterEligibility(t *testing.T) {
 				model string
 				want  bool
 			}{
-				{"default ignores leftover mapping", nil, "gpt-6.1-sol", true},
-				{"disabled ignores leftover mapping", false, "gpt-6.1-sol", true},
-				{"invalid flag does not opt in", "true", "gpt-6.1-sol", true},
-				{"opt in rejects other provider", true, "gpt-6.1-sol", false},
-				{"opt in accepts exact source key", true, "qwen3.8-max", true},
-				{"opt in accepts wildcard source key", true, "qwen3.8-plus", true},
+				{"default enforces configured mapping", nil, "gpt-6.1-sol", false},
+				{"legacy flag cannot disable restrictions", false, "gpt-6.1-sol", false},
+				{"invalid legacy flag cannot disable restrictions", "true", "gpt-6.1-sol", false},
+				{"legacy opt in rejects other provider", true, "gpt-6.1-sol", false},
+				{"accepts exact source key", true, "qwen3.8-max", true},
+				{"accepts wildcard source key", true, "qwen3.8-plus", true},
 				{"mapping targets do not grant access", true, "upstream-only", false},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
@@ -88,7 +88,7 @@ func TestOpenAIPassthroughModelFilterMixedPoolSelection(t *testing.T) {
 				excluded map[int64]struct{}
 				wantID   int64
 			}{
-				{"default preserves passthrough", false, "gpt-6.1-sol", nil, 1},
+				{"filter applies without opt in", false, "gpt-6.1-sol", nil, 2},
 				{"filter chooses GPT account", true, "gpt-6.1-sol", nil, 2},
 				{"filter keeps Qwen account", true, "qwen3.8-max", nil, 1},
 				{"failover never leaks GPT to Qwen", true, "gpt-6.1-sol", map[int64]struct{}{2: {}}, 0},

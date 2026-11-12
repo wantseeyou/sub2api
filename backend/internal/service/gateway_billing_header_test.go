@@ -160,8 +160,8 @@ func TestBuildOAuthRequest_BillingMatchesWireUserAgent(t *testing.T) {
 				require.Contains(t, gjson.GetBytes(wireBody, "system.0.text").String(),
 					"cc_version="+version+"."+computeClaudeCodeFingerprint(wireBody, version)+";")
 				if !tc.mimic {
-					// 使用 Node.js 独立计算 fork 固定出站 2.1.299 UA 的指纹。
-					require.Contains(t, gjson.GetBytes(wireBody, "system.0.text").String(), "cc_version=2.1.299.a6e;")
+					// 使用 Node.js 独立计算 fork 固定出站 2.1.321 UA 的指纹。
+					require.Contains(t, gjson.GetBytes(wireBody, "system.0.text").String(), "cc_version=2.1.321.8ff;")
 				}
 				actualBody, err := io.ReadAll(req.Body)
 				require.NoError(t, err)

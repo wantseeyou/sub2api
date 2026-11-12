@@ -336,7 +336,7 @@ describe('EditAccountModal', () => {
 
   afterEach(() => vi.useRealTimers())
 
-  it.each(['apikey', 'oauth'])('can opt a passthrough %s account into model filtering without changing groups', async (type) => {
+  it.each(['apikey', 'oauth'])('can edit a passthrough %s model whitelist without changing groups', async (type) => {
     const account = buildAccount()
     account.type = type
     account.extra = { openai_passthrough: true }
@@ -345,27 +345,25 @@ describe('EditAccountModal', () => {
     checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
     const wrapper = mountModal(account)
 
-    expect(wrapper.findComponent(ModelWhitelistSelectorStub).exists()).toBe(false)
-    await wrapper.get('[data-testid="edit-openai-passthrough-model-filter"]').setValue(true)
+    expect(wrapper.findComponent(ModelWhitelistSelectorStub).exists()).toBe(true)
     await wrapper.get('[data-testid="rewrite-to-snapshot"]').trigger('click')
     await wrapper.get('form#edit-account-form').trigger('submit.prevent')
 
     const payload = updateAccountMock.mock.calls[0]?.[1]
     expect(payload.extra.openai_passthrough).toBe(true)
-    expect(payload.extra.openai_passthrough_model_filter).toBe(true)
+    expect(payload.extra).not.toHaveProperty('openai_passthrough_model_filter')
     expect(payload.credentials.model_mapping).toEqual({ 'gpt-5.2-2025-12-11': 'gpt-5.2-2025-12-11' })
     expect(payload.group_ids).toEqual([17])
     wrapper.unmount()
   })
 
-  it('loads the saved model filter and removes it when passthrough is disabled', async () => {
+  it('clears the legacy filter flag without changing mappings when passthrough is disabled', async () => {
     const account = buildAccount()
     account.extra = { openai_passthrough: true, openai_passthrough_model_filter: true }
     updateAccountMock.mockReset().mockResolvedValue(account)
     checkMixedChannelRiskMock.mockReset().mockResolvedValue({ has_risk: false })
     const wrapper = mountModal(account)
 
-    expect(wrapper.get<HTMLInputElement>('[data-testid="edit-openai-passthrough-model-filter"]').element.checked).toBe(true)
     expect(wrapper.findComponent(ModelWhitelistSelectorStub).exists()).toBe(true)
     await wrapper.get('[data-testid="edit-openai-passthrough-toggle"]').trigger('click')
     await wrapper.get('form#edit-account-form').trigger('submit.prevent')
@@ -886,6 +884,7 @@ describe('EditAccountModal', () => {
 
   it('preserves model mappings when editing the whitelist', async () => {
     const account = buildAccount()
+    account.extra = { openai_passthrough: true }
     account.credentials.model_mapping = {
       'gpt-5.2': 'gpt-5.2',
       'gpt-latest': 'gpt-5.2'

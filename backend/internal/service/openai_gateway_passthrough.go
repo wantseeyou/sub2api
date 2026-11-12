@@ -18,6 +18,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/requestmodel"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
@@ -26,6 +27,19 @@ import (
 )
 
 const openAIResponsesClientToolMappingContextKey = "openai_responses_client_tool_mapping"
+
+// validateOpenAIPassthroughModels 在转发前校验所有模型候选，防止重复键或大小写变体绕过账号限制。
+func validateOpenAIPassthroughModels(account *Account, body []byte) error {
+	if account == nil || !account.IsOpenAIPassthroughEnabled() || len(account.GetModelMapping()) == 0 {
+		return nil
+	}
+	for _, model := range requestmodel.FromBodyCandidates("", "application/json", body) {
+		if !account.IsModelSupported(model) {
+			return fmt.Errorf("Model %q is not supported by this account", model)
+		}
+	}
+	return nil
+}
 
 func hasOpenAIResponsesClientToolMapping(mapping apicompat.ResponsesClientToolMapping) bool {
 	return len(mapping.CustomTools) > 0 || mapping.ToolSearch || len(mapping.NamespaceTools) > 0

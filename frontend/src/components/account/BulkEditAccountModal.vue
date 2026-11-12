@@ -79,21 +79,6 @@
               ]"
             />
           </button>
-          <label v-if="openaiPassthroughEnabled" class="mt-3 flex items-start gap-2">
-            <input
-              v-model="openaiPassthroughModelFilterEnabled"
-              type="checkbox"
-              data-testid="bulk-openai-passthrough-model-filter"
-              :disabled="!enableOpenAIPassthrough"
-              class="mt-1 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-            />
-            <span class="text-sm">
-              {{ t('admin.accounts.openai.passthroughModelFilter') }}
-              <span class="mt-1 block text-xs text-gray-500 dark:text-gray-400">
-                {{ t('admin.accounts.openai.passthroughModelFilterDesc') }}
-              </span>
-            </span>
-          </label>
         </div>
       </div>
 
@@ -309,15 +294,15 @@
           aria-labelledby="bulk-edit-model-restriction-label"
         >
           <div
-            v-if="isOpenAIModelRestrictionDisabled"
+            v-if="isOpenAIPassthrough"
             class="rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20"
           >
             <p class="text-xs text-amber-700 dark:text-amber-400">
-              {{ t('admin.accounts.openai.modelRestrictionDisabledByPassthrough') }}
+              {{ t('admin.accounts.openai.modelRestrictionPassthroughHint') }}
             </p>
           </div>
 
-          <template v-else>
+          <div>
             <!-- Mode Toggle -->
             <div class="mb-4 flex gap-2">
               <button
@@ -517,7 +502,7 @@
                 </button>
               </div>
             </div>
-          </template>
+          </div>
         </div>
       </div>
 
@@ -1820,7 +1805,6 @@ const rateMultiplier = ref(1)
 const status = ref<'active' | 'inactive'>('active')
 const groupIds = ref<number[]>([])
 const openaiPassthroughEnabled = ref(false)
-const openaiPassthroughModelFilterEnabled = ref(false)
 // Codex namespace 工具摊平兼容开关（仅 OAuth），缺省关闭即原样保留
 const openaiFlattenNamespacesEnabled = ref(false)
 const openAILongContextBillingEnabled = ref(false)
@@ -1877,12 +1861,11 @@ const upstreamBillingAutoProbeOptions = computed(() => [
   { value: 'enabled', label: t('common.enabled') },
   { value: 'disabled', label: t('common.disabled') }
 ])
-const isOpenAIModelRestrictionDisabled = computed(
+const isOpenAIPassthrough = computed(
   () =>
     allOpenAIPassthroughCapable.value &&
     enableOpenAIPassthrough.value &&
-    openaiPassthroughEnabled.value &&
-    !openaiPassthroughModelFilterEnabled.value
+    openaiPassthroughEnabled.value
 )
 
 const openAIWSModeOptions = computed(() => [
@@ -2111,7 +2094,6 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
   if (enableOpenAIPassthrough.value) {
     const extra = ensureExtra()
     extra.openai_passthrough = openaiPassthroughEnabled.value
-    extra.openai_passthrough_model_filter = openaiPassthroughEnabled.value && openaiPassthroughModelFilterEnabled.value
     if (!openaiPassthroughEnabled.value) {
       extra.openai_oauth_passthrough = false
     }
@@ -2152,7 +2134,7 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
         : openAIResponsesMode.value
   }
 
-  if (enableModelRestriction.value && !isOpenAIModelRestrictionDisabled.value) {
+  if (enableModelRestriction.value) {
     // 统一使用 model_mapping 字段
     if (modelRestrictionMode.value === 'whitelist') {
       // 白名单模式：将模型转换为 model_mapping 格式（key=value）
@@ -2529,7 +2511,6 @@ watch(
       // Reset all values
       baseUrl.value = ''
       openaiPassthroughEnabled.value = false
-      openaiPassthroughModelFilterEnabled.value = false
       openaiFlattenNamespacesEnabled.value = false
       openAILongContextBillingEnabled.value = false
       openAIImageSizeTiers.value = [...OPENAI_IMAGE_SIZE_TIERS]

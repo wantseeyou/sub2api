@@ -20,6 +20,11 @@ import (
 
 // Forward forwards request to OpenAI API
 func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (result *OpenAIForwardResult, resultErr error) {
+	if err := validateOpenAIPassthroughModels(account, body); err != nil {
+		MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalModelConfiguration)
+		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": err.Error()}})
+		return nil, err
+	}
 	// 规范化后超限时，回到原始请求按 HTTP 规则重新构造一次；此信号只在拨号和写入前产生。
 	routingBody := body
 	defer func() {

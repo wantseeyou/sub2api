@@ -1594,15 +1594,15 @@
           <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
 
           <div
-            v-if="isOpenAIModelRestrictionDisabled"
+            v-if="isOpenAIPassthrough"
             class="mb-3 rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20"
           >
             <p class="text-xs text-amber-700 dark:text-amber-400">
-              {{ t('admin.accounts.openai.modelRestrictionDisabledByPassthrough') }}
+              {{ t('admin.accounts.openai.modelRestrictionPassthroughHint') }}
             </p>
           </div>
 
-          <template v-else>
+          <div>
             <!-- Mode Toggle -->
             <div class="mb-4 flex gap-2">
               <button
@@ -1778,7 +1778,7 @@
                 </button>
               </div>
             </div>
-          </template>
+          </div>
         </div>
 
         <!-- Pool Mode Section -->
@@ -2492,15 +2492,15 @@
         <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
 
         <div
-          v-if="isOpenAIModelRestrictionDisabled"
+          v-if="isOpenAIPassthrough"
           class="mb-3 rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20"
         >
           <p class="text-xs text-amber-700 dark:text-amber-400">
-            {{ t('admin.accounts.openai.modelRestrictionDisabledByPassthrough') }}
+            {{ t('admin.accounts.openai.modelRestrictionPassthroughHint') }}
           </p>
         </div>
 
-        <template v-else>
+        <div>
           <!-- Mode Toggle -->
           <div class="mb-4 flex gap-2">
             <button
@@ -2623,7 +2623,7 @@
               </button>
             </div>
           </div>
-        </template>
+        </div>
       </div>
 
       <!-- Temp Unschedulable Rules -->
@@ -3314,20 +3314,6 @@
             />
           </button>
         </div>
-        <label v-if="openaiPassthroughEnabled" class="mt-3 flex items-start gap-2">
-          <input
-            v-model="openaiPassthroughModelFilterEnabled"
-            type="checkbox"
-            data-testid="create-openai-passthrough-model-filter"
-            class="mt-1 rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-          />
-          <span class="text-sm">
-            {{ t('admin.accounts.openai.passthroughModelFilter') }}
-            <span class="mt-1 block text-xs text-gray-500 dark:text-gray-400">
-              {{ t('admin.accounts.openai.passthroughModelFilterDesc') }}
-            </span>
-          </span>
-        </label>
       </div>
 
       <!-- OpenAI Codex namespace 工具摊平（兼容开关，仅 OAuth） -->
@@ -4737,7 +4723,6 @@ const applyGrokOAuthUpstreamConfig = (credentials: Record<string, unknown>) => {
 const interceptWarmupRequests = ref(false)
 const autoPauseOnExpired = ref(true)
 const openaiPassthroughEnabled = ref(false)
-const openaiPassthroughModelFilterEnabled = ref(false)
 // OpenAI Codex namespace 工具摊平兼容开关（仅 OAuth），缺省关闭即原样保留
 const openaiFlattenNamespacesEnabled = ref(false)
 const openAILongContextBillingEnabled = ref(false)
@@ -4985,8 +4970,8 @@ const openAIWSModeHintKey = computed(() =>
   resolveOpenAIWSModeHintKey(openaiResponsesWebSocketV2Mode.value)
 )
 
-const isOpenAIModelRestrictionDisabled = computed(() =>
-  form.platform === 'openai' && openaiPassthroughEnabled.value && !openaiPassthroughModelFilterEnabled.value
+const isOpenAIPassthrough = computed(() =>
+  form.platform === 'openai' && openaiPassthroughEnabled.value
 )
 
 const mixedChannelWarningMessageText = computed(() => {
@@ -5250,7 +5235,6 @@ watch(
     }
     if (newPlatform !== 'openai') {
       openaiPassthroughEnabled.value = false
-      openaiPassthroughModelFilterEnabled.value = false
       openaiFlattenNamespacesEnabled.value = false
       openAIEndpointCapabilities.value = ['chat_completions', 'embeddings']
       openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
@@ -5711,7 +5695,6 @@ const resetForm = () => {
   interceptWarmupRequests.value = false
   autoPauseOnExpired.value = true
   openaiPassthroughEnabled.value = false
-  openaiPassthroughModelFilterEnabled.value = false
   openaiFlattenNamespacesEnabled.value = false
   openAILongContextBillingEnabled.value = false
   openAILongContextBillingTouched.value = false
@@ -5802,11 +5785,6 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
   } else {
     delete extra.openai_passthrough
     delete extra.openai_oauth_passthrough
-  }
-  if (openaiPassthroughEnabled.value && openaiPassthroughModelFilterEnabled.value) {
-    extra.openai_passthrough_model_filter = true
-  } else {
-    delete extra.openai_passthrough_model_filter
   }
   // 缺省即保留 namespace，不写空值，避免 extra 里堆积默认项
   if (form.type === 'oauth' && openaiFlattenNamespacesEnabled.value) {
@@ -6217,12 +6195,10 @@ const handleSubmit = async () => {
     }
   }
 
-  // Add model mapping if configured（OpenAI 开启自动透传时不应用）
-  if (!isOpenAIModelRestrictionDisabled.value) {
-    const modelMapping = buildModelMappingObject(modelRestrictionMode.value, allowedModels.value, modelMappings.value)
-    if (modelMapping) {
-      credentials.model_mapping = modelMapping
-    }
+  // 保存模型配置；透传模式仍用于调度准入
+  const modelMapping = buildModelMappingObject(modelRestrictionMode.value, allowedModels.value, modelMappings.value)
+  if (modelMapping) {
+    credentials.model_mapping = modelMapping
   }
   if (form.platform === 'openai') {
     applyOpenAIEndpointCapabilities(credentials)
@@ -6716,8 +6692,8 @@ const handleOpenAIExchange = async (authCode: string) => {
     const extra = buildOpenAIExtra(oauthExtra)
     const shouldCreateOpenAI = form.platform === 'openai'
 
-    // Add model mapping for OpenAI OAuth accounts（透传模式下不应用）
-    if (shouldCreateOpenAI && !isOpenAIModelRestrictionDisabled.value) {
+    // 保存 OpenAI OAuth 模型配置；透传模式仍用于调度准入
+    if (shouldCreateOpenAI) {
       const modelMapping = buildModelMappingObject(modelRestrictionMode.value, allowedModels.value, modelMappings.value)
       if (modelMapping) {
         credentials.model_mapping = modelMapping
@@ -6771,11 +6747,9 @@ const OPENAI_MOBILE_RT_CLIENT_ID = 'app_LlGpXReQgckcGGUo2JrYvtJK'
 
 const buildOpenAICodexImportCredentialExtras = (): Record<string, unknown> | null => {
   const credentials: Record<string, unknown> = {}
-  if (!isOpenAIModelRestrictionDisabled.value) {
-    const modelMapping = buildModelMappingObject(modelRestrictionMode.value, allowedModels.value, modelMappings.value)
-    if (modelMapping) {
-      credentials.model_mapping = modelMapping
-    }
+  const modelMapping = buildModelMappingObject(modelRestrictionMode.value, allowedModels.value, modelMappings.value)
+  if (modelMapping) {
+    credentials.model_mapping = modelMapping
   }
 
   const compactModelMapping = buildOpenAICompactModelMapping()
@@ -6998,8 +6972,8 @@ const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string)
         const oauthExtra = oauthClient.buildExtraInfo(tokenInfo) as Record<string, unknown> | undefined
         const extra = buildOpenAIExtra(oauthExtra)
 
-        // Add model mapping for OpenAI OAuth accounts（透传模式下不应用）
-        if (shouldCreateOpenAI && !isOpenAIModelRestrictionDisabled.value) {
+        // 保存 OpenAI OAuth 模型配置；透传模式仍用于调度准入
+        if (shouldCreateOpenAI) {
           const modelMapping = buildModelMappingObject(modelRestrictionMode.value, allowedModels.value, modelMappings.value)
           if (modelMapping) {
             credentials.model_mapping = modelMapping

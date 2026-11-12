@@ -1138,13 +1138,7 @@ func schedulerCacheBenchmarkAccounts(size int) []service.Account {
 	return accounts
 }
 
-// 调度投影必须保留 OpenAI 透传开关。
-//
-// 候选过滤走 ListSchedulableAccounts，读的是 buildSchedulerMetadataAccount 产出的精简投影；
-// Account.IsModelSupported 又靠 extra 上的透传开关短路 model_mapping 白名单（#4936）。
-// 一旦投影把开关裁掉、却保留了白名单，透传账号在选号阶段就会退回白名单判定并被误判成
-// model_not_supported，而转发阶段（读完整账号）仍按透传工作 —— 表现为"单独测这个账号能通、
-// 走网关却报 no available accounts"。#4936 修的是判定逻辑，这里守的是喂给判定的输入。
+// 调度投影必须同时保留 OpenAI 透传开关与模型配置，准入结果与完整账号一致。
 func TestBuildSchedulerMetadataAccount_KeepsOpenAIPassthroughForModelGate(t *testing.T) {
 	for _, key := range []string{"openai_passthrough", "openai_oauth_passthrough"} {
 		t.Run(key, func(t *testing.T) {
@@ -1153,14 +1147,13 @@ func TestBuildSchedulerMetadataAccount_KeepsOpenAIPassthroughForModelGate(t *tes
 				Platform: service.PlatformOpenAI,
 				Type:     service.AccountTypeOAuth,
 				Credentials: map[string]any{
-					// 账号从白名单模式切到透传后常见的残留映射，未列出请求的模型。
-					"model_mapping": map[string]any{"gpt-5.5": "gpt-5.5"},
+					"model_mapping": map[string]any{"gpt-5.4": "ignored-target"},
 					"access_token":  "drop-me",
 				},
 				Extra: map[string]any{key: true},
 			}
-			require.True(t, account.IsModelSupported("gpt-5.6-sol"),
-				"前置条件：透传账号本应放行白名单外的模型")
+			require.True(t, account.IsModelSupported("gpt-5.4"))
+			require.False(t, account.IsModelSupported("gpt-5.6-sol"))
 
 			meta := buildSchedulerMetadataAccount(account)
 
@@ -1172,10 +1165,10 @@ func TestBuildSchedulerMetadataAccount_KeepsOpenAIPassthroughForModelGate(t *tes
 
 			require.Equal(t, true, restored.Extra[key])
 			require.True(t, restored.IsOpenAIPassthroughEnabled())
-			require.True(t, restored.IsModelSupported("gpt-5.6-sol"),
-				"投影裁掉透传开关会让透传账号在候选过滤阶段被误判为 model_not_supported")
-			// 白名单本身仍需保留：非透传账号依赖它做模型门。
-			require.Equal(t, map[string]any{"gpt-5.5": "gpt-5.5"}, restored.Credentials["model_mapping"])
+			require.True(t, restored.IsModelSupported("gpt-5.4"))
+			require.False(t, restored.IsModelSupported("gpt-5.6-sol"))
+			require.Equal(t, "gpt-5.4", restored.GetMappedModel("gpt-5.4"))
+			require.Equal(t, map[string]any{"gpt-5.4": "ignored-target"}, restored.Credentials["model_mapping"])
 		})
 	}
 }
