@@ -259,15 +259,15 @@
           <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
 
           <div
-            v-if="isOpenAIModelRestrictionDisabled"
+            v-if="isOpenAIPassthrough"
             class="mb-3 rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20"
           >
             <p class="text-xs text-amber-700 dark:text-amber-400">
-              {{ t('admin.accounts.openai.modelRestrictionDisabledByPassthrough') }}
+              {{ t('admin.accounts.openai.modelRestrictionPassthroughHint') }}
             </p>
           </div>
 
-          <template v-else>
+          <div>
             <!-- Mode Toggle -->
             <div
               :data-testid="account.platform === 'grok' ? 'grok-model-mode-tabs' : undefined"
@@ -512,7 +512,7 @@
                 </button>
               </div>
             </div>
-          </template>
+          </div>
         </div>
 
         <!-- Pool Mode Section -->
@@ -883,15 +883,15 @@
         <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
 
         <div
-          v-if="isOpenAIModelRestrictionDisabled"
+          v-if="isOpenAIPassthrough"
           class="mb-3 rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20"
         >
           <p class="text-xs text-amber-700 dark:text-amber-400">
-            {{ t('admin.accounts.openai.modelRestrictionDisabledByPassthrough') }}
+            {{ t('admin.accounts.openai.modelRestrictionPassthroughHint') }}
           </p>
         </div>
 
-        <template v-else>
+        <div>
           <!-- Mode Toggle -->
           <div
             :data-testid="account.platform === 'grok' ? 'grok-model-mode-tabs' : undefined"
@@ -1080,7 +1080,7 @@
               </button>
             </div>
           </div>
-        </template>
+        </div>
       </div>
 
       <!-- Upstream fields (only for upstream type) -->
@@ -4415,7 +4415,7 @@ const normalizeOpenAIResponsesMode = (mode: unknown): OpenAIResponsesMode => {
   }
   return 'auto'
 }
-const isOpenAIModelRestrictionDisabled = computed(() =>
+const isOpenAIPassthrough = computed(() =>
   props.account?.platform === 'openai' && openaiPassthroughEnabled.value
 )
 const openAIResponsesStatusKey = computed(() => {
@@ -4591,16 +4591,10 @@ const buildModelRestrictionMapping = () =>
   buildModelMappingObject('combined', allowedModels.value, modelMappings.value)
 
 const applyOpenAIModelMappingCredentials = (credentials: Record<string, unknown>) => {
-  const shouldApplyModelMapping = !openaiPassthroughEnabled.value
-
-  if (shouldApplyModelMapping) {
-    const modelMapping = buildModelRestrictionMapping()
-    if (modelMapping) {
-      credentials.model_mapping = modelMapping
-    } else {
-      delete credentials.model_mapping
-    }
-  } else if (!credentials.model_mapping) {
+  const modelMapping = buildModelRestrictionMapping()
+  if (modelMapping) {
+    credentials.model_mapping = modelMapping
+  } else {
     delete credentials.model_mapping
   }
 
@@ -5692,7 +5686,6 @@ const buildUpdatePayload = (validate = true): Record<string, unknown> | undefine
     if (props.account.type === 'apikey') {
       const currentCredentials = (props.account.credentials as Record<string, unknown>) || {}
       const newBaseUrl = editBaseUrl.value.trim() || defaultBaseUrl.value
-      const shouldApplyModelMapping = !(props.account.platform === 'openai' && openaiPassthroughEnabled.value)
 
       // Always update credentials for apikey type to handle model mapping changes
       const newCredentials: Record<string, unknown> = {
@@ -5747,16 +5740,12 @@ const buildUpdatePayload = (validate = true): Record<string, unknown> | undefine
         return
       }
 
-      // Add model mapping if configured（OpenAI 开启自动透传时保留现有映射，不再编辑）
-      if (shouldApplyModelMapping) {
-        const modelMapping = buildModelRestrictionMapping()
-        if (modelMapping) {
-          newCredentials.model_mapping = modelMapping
-        } else {
-          delete newCredentials.model_mapping
-        }
-      } else if (currentCredentials.model_mapping) {
-        newCredentials.model_mapping = currentCredentials.model_mapping
+      // 保存模型配置；透传模式仍用于调度准入。
+      const modelMapping = buildModelRestrictionMapping()
+      if (modelMapping) {
+        newCredentials.model_mapping = modelMapping
+      } else {
+        delete newCredentials.model_mapping
       }
       if (props.account.platform === 'openai') {
         applyOpenAIEndpointCapabilities(newCredentials)

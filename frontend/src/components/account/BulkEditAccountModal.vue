@@ -294,15 +294,15 @@
           aria-labelledby="bulk-edit-model-restriction-label"
         >
           <div
-            v-if="isOpenAIModelRestrictionDisabled"
+            v-if="isOpenAIPassthrough"
             class="rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20"
           >
             <p class="text-xs text-amber-700 dark:text-amber-400">
-              {{ t('admin.accounts.openai.modelRestrictionDisabledByPassthrough') }}
+              {{ t('admin.accounts.openai.modelRestrictionPassthroughHint') }}
             </p>
           </div>
 
-          <template v-else>
+          <div>
             <!-- Mode Toggle -->
             <div class="mb-4 flex gap-2">
               <button
@@ -502,7 +502,7 @@
                 </button>
               </div>
             </div>
-          </template>
+          </div>
         </div>
       </div>
 
@@ -1861,7 +1861,7 @@ const upstreamBillingAutoProbeOptions = computed(() => [
   { value: 'enabled', label: t('common.enabled') },
   { value: 'disabled', label: t('common.disabled') }
 ])
-const isOpenAIModelRestrictionDisabled = computed(
+const isOpenAIPassthrough = computed(
   () =>
     allOpenAIPassthroughCapable.value &&
     enableOpenAIPassthrough.value &&
@@ -2134,7 +2134,7 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
         : openAIResponsesMode.value
   }
 
-  if (enableModelRestriction.value && !isOpenAIModelRestrictionDisabled.value) {
+  if (enableModelRestriction.value) {
     // 统一使用 model_mapping 字段
     if (modelRestrictionMode.value === 'whitelist') {
       // 白名单模式：将模型转换为 model_mapping 格式（key=value）

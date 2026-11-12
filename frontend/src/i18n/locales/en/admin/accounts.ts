@@ -844,7 +844,7 @@ export default {
         testMode: 'Test mode',
         testModeDefault: 'Default request',
         testModeCompact: 'Compact probe',
-        modelRestrictionDisabledByPassthrough: 'Automatic passthrough is enabled: model whitelist/mapping will not take effect.',
+        modelRestrictionPassthroughHint: 'Automatic passthrough is enabled: model settings still filter account scheduling; model names are not remapped when forwarding.',
       },
       grok: {
         baseUrlHint: 'Grok OAuth accounts forward to the official xAI API base URL.',

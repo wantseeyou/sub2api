@@ -911,7 +911,7 @@ describe('BulkEditAccountModal', () => {
     })
   })
 
-  it('开启 OpenAI 自动透传时不再同时提交模型限制', async () => {
+  it('开启 OpenAI 自动透传时仍可同时提交模型限制', async () => {
     const wrapper = mountModal({
       selectedPlatforms: ['openai'],
       selectedTypes: ['oauth']
@@ -925,11 +925,12 @@ describe('BulkEditAccountModal', () => {
 
     expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledTimes(1)
     expect(adminAPI.accounts.bulkUpdate).toHaveBeenCalledWith([1, 2], {
+      credentials: { model_mapping: {} },
       extra: {
         openai_passthrough: true
       }
     })
-    expect(wrapper.text()).toContain('admin.accounts.openai.modelRestrictionDisabledByPassthrough')
+    expect(wrapper.text()).toContain('admin.accounts.openai.modelRestrictionPassthroughHint')
   })
 
   it('filtered-results 模式下应提交 filters 而不是 account_ids', async () => {

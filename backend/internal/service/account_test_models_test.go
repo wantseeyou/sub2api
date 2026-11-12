@@ -226,27 +226,27 @@ func TestFetchOpenAIAccountModelsOAuthPassthroughIgnoresMappingTargets(t *testin
 			models, err := svc.FetchOpenAIAccountModels(context.Background(), account)
 			require.NoError(t, err)
 			ids := pickerModelIDs(models)
-			require.Contains(t, ids, "gpt-6-astra", "passthrough preserves the upstream catalog")
+			require.NotContains(t, ids, "gpt-6-astra", "passthrough still filters unsupported models")
 			require.Contains(t, ids, "gpt-image-2.5-flare")
-			require.Contains(t, ids, "gpt-image-2.5-sunburst")
+			require.NotContains(t, ids, "gpt-image-2.5-sunburst", "native image choices also follow the whitelist")
 			require.Contains(t, ids, "gpt-image-custom", "preserve existing native image choices in passthrough")
 			require.NotContains(t, ids, "paint", "passthrough must not revive a stale mapping alias")
 		})
 	}
 }
 
-func TestFetchOpenAIAccountModelsAPIKeyPassthroughIgnoresMapping(t *testing.T) {
+func TestFetchOpenAIAccountModelsAPIKeyPassthroughFiltersWithoutRemapping(t *testing.T) {
 	gateway := newCodexModelsAPIKeyTestService(&codexModelsHTTPUpstreamStub{do: func(_ *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
 		return ordinaryModelsUpstreamResponse(`{"data":[{"id":"target"},{"id":"other"}]}`), nil
 	}})
 	svc := &AccountTestService{openaiGatewayService: gateway}
 	account := newCodexModelsAPIKeyTestAccount("https://models.example/v1")
 	account.Extra = map[string]any{"openai_passthrough": true}
-	account.Credentials["model_mapping"] = map[string]any{"paint": "gpt-image-2.5-flare"}
+	account.Credentials["model_mapping"] = map[string]any{"target": "ignored-target", "paint": "gpt-image-2.5-flare"}
 
 	models, err := svc.FetchOpenAIAccountModels(context.Background(), account)
 	require.NoError(t, err)
-	require.Equal(t, []string{"target", "other"}, pickerModelIDs(models))
+	require.Equal(t, []string{"target"}, pickerModelIDs(models))
 }
 
 func TestFetchOpenAIAccountModelsMappingChangesReuseRawCache(t *testing.T) {

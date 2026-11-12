@@ -363,11 +363,20 @@ describe('CreateAccountModal OpenAI long-context billing', () => {
     await selectButtonByText(wrapper, 'API Key')
     await wrapper.get('form#create-account-form input[type="text"]').setValue('OpenCode account')
     await wrapper.get('form#create-account-form input[type="password"]').setValue('test-api-key')
+    const passthroughToggle = wrapper.findAll('button').find(button =>
+      button.element.parentElement?.textContent?.includes('admin.accounts.openai.oauthPassthrough')
+    )
+    expect(passthroughToggle).toBeDefined()
+    await passthroughToggle!.trigger('click')
     await wrapper.get('[data-testid="model-whitelist-selector"]').trigger('click')
     await wrapper.get('form#create-account-form').trigger('submit.prevent')
     await flushPromises()
 
     expect(createAccountMock).toHaveBeenCalledOnce()
+    expect(createAccountMock.mock.calls[0]?.[0]?.extra?.openai_passthrough).toBe(true)
+    expect(createAccountMock.mock.calls[0]?.[0]?.credentials?.model_mapping).toEqual({
+      'public-glm': 'public-glm'
+    })
     expect(syncUpstreamModelsMock).toHaveBeenCalledWith(42)
   })
 

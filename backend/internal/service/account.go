@@ -966,15 +966,12 @@ func (a *Account) IsModelSupported(requestedModel string) bool {
 }
 
 func (a *Account) isModelMappingSupported(requestedModel string) bool {
-	// 透传模式仅替换认证、模型语义完全交由上游决定，因此放行所有模型。
-	// 该短路必须在 model_mapping 判定之前：账号从"白名单模式"切换到透传后，
-	// credentials 里常残留旧的非空 model_mapping，若不在此放行，透传账号会被
-	// model_mapping 白名单错误排除出候选集，导致 no available accounts / 404（issue #4936）。
-	if a.IsOpenAIPassthroughEnabled() {
-		return true
-	}
 	mapping := a.GetModelMapping()
 	if len(mapping) == 0 {
+		// 透传只跳过模型改写；未配置模型限制时仍兼容允许所有模型。
+		if a.IsOpenAIPassthroughEnabled() {
+			return true
+		}
 		if a.IsOpenAIOAuth() {
 			return isOpenAIOAuthServableModel(requestedModel)
 		}
@@ -999,21 +996,23 @@ func (a *Account) GetMappedModel(requestedModel string) string {
 
 // ResolveMappedModel 获取映射后的模型名，并返回是否命中了账号级映射。
 // matched=true 表示命中了精确映射或通配符映射，即使映射结果与原模型名相同。
+// OpenAI 透传只判断配置是否命中，始终保留请求模型名。
 func (a *Account) ResolveMappedModel(requestedModel string) (mappedModel string, matched bool) {
 	mapping := a.GetModelMapping()
 	if len(mapping) == 0 {
 		return requestedModel, false
 	}
-	if mappedModel, matched := resolveRequestedModelInMapping(mapping, requestedModel); matched {
-		return mappedModel, true
-	}
-	normalized := normalizeRequestedModelForLookup(a.Platform, requestedModel)
-	if normalized != requestedModel {
-		if mappedModel, matched := resolveRequestedModelInMapping(mapping, normalized); matched {
-			return mappedModel, true
+	mappedModel, matched = resolveRequestedModelInMapping(mapping, requestedModel)
+	if !matched {
+		normalized := normalizeRequestedModelForLookup(a.Platform, requestedModel)
+		if normalized != requestedModel {
+			mappedModel, matched = resolveRequestedModelInMapping(mapping, normalized)
 		}
 	}
-	return requestedModel, false
+	if !matched || a.IsOpenAIPassthroughEnabled() {
+		return requestedModel, matched
+	}
+	return mappedModel, true
 }
 
 // GetOpenAICompactMode returns the compact routing mode for an OpenAI account.

@@ -88,18 +88,18 @@ func TestIsModelSupported_OpenAIOAuthPassthroughAllowsAll(t *testing.T) {
 	require.True(t, account.IsModelSupported("deepseek-v4"))
 }
 
-func TestIsModelSupported_OpenAIOAuthPassthroughIgnoresLeftoverMapping(t *testing.T) {
+func TestIsModelSupported_OpenAIOAuthPassthroughRespectsMapping(t *testing.T) {
 	account := newOpenAIOAuthAccountForModelTest()
 	account.Extra = map[string]any{"openai_passthrough": true}
-	// 账号从"白名单模式"切到透传后，credentials 里常残留旧的非空 model_mapping。
-	// 透传应无视该白名单，放行不在其中的模型（issue #4936）；否则透传账号会被
-	// 调度期的 IsModelSupported 排除，客户端收到 404 "not supported by any account"。
+	// 透传时仍使用配置键筛选账号，但不将请求改写为映射目标。
 	account.Credentials = map[string]any{
-		"model_mapping": map[string]any{"gpt-5.4": "gpt-5.4"},
+		"model_mapping": map[string]any{"gpt-5.4": "ignored-target"},
 	}
 
-	require.True(t, account.IsModelSupported("gpt-5.6-sol"), "透传应放行不在残留白名单中的新模型")
-	require.True(t, account.IsModelSupported("deepseek-v4"), "透传应放行任意模型")
+	require.True(t, account.IsModelSupported("gpt-5.4"))
+	require.False(t, account.IsModelSupported("gpt-5.6-sol"), "透传不能绕过账号模型准入")
+	require.False(t, account.IsModelSupported("deepseek-v4"))
+	require.Equal(t, "gpt-5.4", account.GetMappedModel("gpt-5.4"))
 }
 
 func TestIsModelSupported_OpenAIAPIKeyEmptyMappingAllowsAll(t *testing.T) {

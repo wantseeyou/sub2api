@@ -818,8 +818,8 @@ func prioritizeOpenAICompactAccounts(accounts []*Account) []*Account {
 // when the caller is on the /responses/compact path.
 func resolveOpenAIAccountUpstreamModelForRequest(account *Account, requestedModel string, requireCompact bool) string {
 	// Forward checks the raw Chat Completions fallback before passthrough.
-	// These API-key accounts therefore apply normal account model_mapping and
-	// upstream normalization, but never compact_model_mapping.
+	// 普通账号沿用模型映射及归一化；透传账号由公共解析逻辑保留原模型名。
+	// 该回退不应用 compact_model_mapping。
 	if shouldForwardOpenAIResponsesViaRawChatCompletions(account) {
 		upstreamModel := resolveOpenAIForwardModel(account, requestedModel, "")
 		return normalizeOpenAIModelForUpstream(account, upstreamModel)

@@ -1594,15 +1594,15 @@
           <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
 
           <div
-            v-if="isOpenAIModelRestrictionDisabled"
+            v-if="isOpenAIPassthrough"
             class="mb-3 rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20"
           >
             <p class="text-xs text-amber-700 dark:text-amber-400">
-              {{ t('admin.accounts.openai.modelRestrictionDisabledByPassthrough') }}
+              {{ t('admin.accounts.openai.modelRestrictionPassthroughHint') }}
             </p>
           </div>
 
-          <template v-else>
+          <div>
             <!-- Mode Toggle -->
             <div class="mb-4 flex gap-2">
               <button
@@ -1778,7 +1778,7 @@
                 </button>
               </div>
             </div>
-          </template>
+          </div>
         </div>
 
         <!-- Pool Mode Section -->
@@ -2492,15 +2492,15 @@
         <label class="input-label">{{ t('admin.accounts.modelRestriction') }}</label>
 
         <div
-          v-if="isOpenAIModelRestrictionDisabled"
+          v-if="isOpenAIPassthrough"
           class="mb-3 rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20"
         >
           <p class="text-xs text-amber-700 dark:text-amber-400">
-            {{ t('admin.accounts.openai.modelRestrictionDisabledByPassthrough') }}
+            {{ t('admin.accounts.openai.modelRestrictionPassthroughHint') }}
           </p>
         </div>
 
-        <template v-else>
+        <div>
           <!-- Mode Toggle -->
           <div class="mb-4 flex gap-2">
             <button
@@ -2623,7 +2623,7 @@
               </button>
             </div>
           </div>
-        </template>
+        </div>
       </div>
 
       <!-- Temp Unschedulable Rules -->
@@ -4969,7 +4969,7 @@ const openAIWSModeHintKey = computed(() =>
   resolveOpenAIWSModeHintKey(openaiResponsesWebSocketV2Mode.value)
 )
 
-const isOpenAIModelRestrictionDisabled = computed(() =>
+const isOpenAIPassthrough = computed(() =>
   form.platform === 'openai' && openaiPassthroughEnabled.value
 )
 
@@ -6194,12 +6194,10 @@ const handleSubmit = async () => {
     }
   }
 
-  // Add model mapping if configured（OpenAI 开启自动透传时不应用）
-  if (!isOpenAIModelRestrictionDisabled.value) {
-    const modelMapping = buildModelMappingObject(modelRestrictionMode.value, allowedModels.value, modelMappings.value)
-    if (modelMapping) {
-      credentials.model_mapping = modelMapping
-    }
+  // 保存模型配置；透传模式仍用于调度准入
+  const modelMapping = buildModelMappingObject(modelRestrictionMode.value, allowedModels.value, modelMappings.value)
+  if (modelMapping) {
+    credentials.model_mapping = modelMapping
   }
   if (form.platform === 'openai') {
     applyOpenAIEndpointCapabilities(credentials)
@@ -6693,8 +6691,8 @@ const handleOpenAIExchange = async (authCode: string) => {
     const extra = buildOpenAIExtra(oauthExtra)
     const shouldCreateOpenAI = form.platform === 'openai'
 
-    // Add model mapping for OpenAI OAuth accounts（透传模式下不应用）
-    if (shouldCreateOpenAI && !isOpenAIModelRestrictionDisabled.value) {
+    // 保存 OpenAI OAuth 模型配置；透传模式仍用于调度准入
+    if (shouldCreateOpenAI) {
       const modelMapping = buildModelMappingObject(modelRestrictionMode.value, allowedModels.value, modelMappings.value)
       if (modelMapping) {
         credentials.model_mapping = modelMapping
@@ -6748,11 +6746,9 @@ const OPENAI_MOBILE_RT_CLIENT_ID = 'app_LlGpXReQgckcGGUo2JrYvtJK'
 
 const buildOpenAICodexImportCredentialExtras = (): Record<string, unknown> | null => {
   const credentials: Record<string, unknown> = {}
-  if (!isOpenAIModelRestrictionDisabled.value) {
-    const modelMapping = buildModelMappingObject(modelRestrictionMode.value, allowedModels.value, modelMappings.value)
-    if (modelMapping) {
-      credentials.model_mapping = modelMapping
-    }
+  const modelMapping = buildModelMappingObject(modelRestrictionMode.value, allowedModels.value, modelMappings.value)
+  if (modelMapping) {
+    credentials.model_mapping = modelMapping
   }
 
   const compactModelMapping = buildOpenAICompactModelMapping()
@@ -6975,8 +6971,8 @@ const handleOpenAIBatchRT = async (refreshTokenInput: string, clientId?: string)
         const oauthExtra = oauthClient.buildExtraInfo(tokenInfo) as Record<string, unknown> | undefined
         const extra = buildOpenAIExtra(oauthExtra)
 
-        // Add model mapping for OpenAI OAuth accounts（透传模式下不应用）
-        if (shouldCreateOpenAI && !isOpenAIModelRestrictionDisabled.value) {
+        // 保存 OpenAI OAuth 模型配置；透传模式仍用于调度准入
+        if (shouldCreateOpenAI) {
           const modelMapping = buildModelMappingObject(modelRestrictionMode.value, allowedModels.value, modelMappings.value)
           if (modelMapping) {
             credentials.model_mapping = modelMapping

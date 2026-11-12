@@ -1241,6 +1241,10 @@ func normalizeOpenAIResponsesImageOnlyModel(reqBody map[string]any) bool {
 }
 
 func normalizeOpenAIModelForUpstream(account *Account, model string) string {
+	// 透传不归一化模型名，账号模型准入在调度阶段独立判断。
+	if account != nil && account.IsOpenAIPassthroughEnabled() {
+		return model
+	}
 	if account == nil || account.UsesOpenAICodexProtocol() {
 		return normalizeCodexModel(model)
 	}

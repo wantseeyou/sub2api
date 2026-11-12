@@ -177,7 +177,7 @@ func projectAccountModelsBody(body []byte, account *Account, group *Group, codex
 // projectAccountModelAliases retains the source entry's metadata, never changes
 // the shared response, and never synthesizes models absent from this account.
 func projectAccountModelAliases(body []byte, account *Account, group *Group, codex bool) ([]byte, error) {
-	if account.IsOpenAIPassthroughEnabled() || len(account.GetModelMapping()) == 0 {
+	if len(account.GetModelMapping()) == 0 {
 		return body, nil
 	}
 	field, idField := "data", "id"

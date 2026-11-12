@@ -848,6 +848,7 @@ describe('EditAccountModal', () => {
 
   it('preserves model mappings when editing the whitelist', async () => {
     const account = buildAccount()
+    account.extra = { openai_passthrough: true }
     account.credentials.model_mapping = {
       'gpt-5.2': 'gpt-5.2',
       'gpt-latest': 'gpt-5.2'
