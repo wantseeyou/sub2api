@@ -154,22 +154,25 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	clientReqStream := reqStream
 	executionScope, _ := resolveOpenAIWSExecutionScope(c, body, getAPIKeyIDFromContext(c))
 	upstreamPassthroughModel := ""
+	billingModel, forwardModel := resolveOpenAIForwardMappedModels(account, reqModel, false)
 	if isOpenAIResponsesCompactPath(c) {
-		compactMappedModel := s.resolveOpenAICompactFallbackModel(account, reqModel)
-		if compactMappedModel != "" && compactMappedModel != reqModel {
-			nextBody, setErr := sjson.SetBytes(body, "model", compactMappedModel)
-			if setErr != nil {
-				return nil, fmt.Errorf("set compact passthrough model: %w", setErr)
-			}
-			body = nextBody
-			upstreamPassthroughModel = compactMappedModel
-			attemptImageIntentInvalidated = true
+		if compactMappedModel := s.resolveOpenAICompactFallbackModel(account, reqModel); compactMappedModel != "" {
+			forwardModel = compactMappedModel
 		}
+	}
+	if forwardModel != "" && forwardModel != reqModel {
+		nextBody, setErr := sjson.SetBytes(body, "model", forwardModel)
+		if setErr != nil {
+			return nil, fmt.Errorf("set passthrough model: %w", setErr)
+		}
+		body = nextBody
+		upstreamPassthroughModel = forwardModel
+		attemptImageIntentInvalidated = true
 	}
 
 	if account != nil && account.UsesOpenAICodexProtocol() {
-		if isOpenAICodexModel(reqModel) && !gjson.GetBytes(body, "instructions").Exists() {
-			nextBody, setErr := sjson.SetBytes(body, "instructions", defaultCodexSynthInstructions(reqModel))
+		if isOpenAICodexModel(forwardModel) && !gjson.GetBytes(body, "instructions").Exists() {
+			nextBody, setErr := sjson.SetBytes(body, "instructions", defaultCodexSynthInstructions(forwardModel))
 			if setErr != nil {
 				return nil, fmt.Errorf("set passthrough codex instructions: %w", setErr)
 			}
@@ -260,7 +263,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 	}
 
 	// Apply OpenAI fast policy to the passthrough body (filter/block by service_tier).
-	// 统一使用 upstream 视角的 model：透传路径下 body 已经过 compact 映射 +
+	// 统一使用 upstream 视角的 model：透传路径下 body 已经过账号/compact 映射 +
 	// OAuth normalize，body 中的 model 字段即上游真正会看到的 slug。
 	// 这样可以与 chat-completions / messages / native /responses 入口的
 	// upstreamModel 保持一致，避免 whitelist 命中差异。当 body 中没有
@@ -398,6 +401,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 			return result, wsErr
 		}
 		result.ReasoningEffort = reasoningEffort
+		result.BillingModel = billingModel
 		if result.ImageCount > 0 {
 			result.BillingModel = imageBillingModel
 			result.ImageSize = imageSizeTier
@@ -579,6 +583,7 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		ResponseID:                    responseID,
 		Usage:                         *usage,
 		Model:                         reqModel,
+		BillingModel:                  billingModel,
 		UpstreamModel:                 upstreamPassthroughModel,
 		UpstreamResponseModel:         observedUpstreamResponseModel(c),
 		UpstreamResponseModelConflict: observedUpstreamResponseModelConflict(c),
@@ -2495,7 +2500,7 @@ func (s *OpenAIGatewayService) handleNonStreamingResponsePassthrough(
 
 // handlePassthroughSSEToJSON converts an SSE response body into a JSON
 // response for the passthrough path. It mirrors handleSSEToJSON while
-// preserving passthrough payloads, except compact-only model remapping may
+// preserving passthrough payloads, except account or compact model remapping may
 // rewrite model fields back to the original requested model.
 func (s *OpenAIGatewayService) handlePassthroughSSEToJSON(resp *http.Response, c *gin.Context, account *Account, body []byte, originalModel string, mappedModel string) (*openaiNonStreamingResultPassthrough, error) {
 	bodyText := string(body)

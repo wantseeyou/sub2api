@@ -818,27 +818,25 @@ func prioritizeOpenAICompactAccounts(accounts []*Account) []*Account {
 // when the caller is on the /responses/compact path.
 func resolveOpenAIAccountUpstreamModelForRequest(account *Account, requestedModel string, requireCompact bool) string {
 	// Forward checks the raw Chat Completions fallback before passthrough.
-	// 普通账号沿用模型映射及归一化；透传账号由公共解析逻辑保留原模型名。
+	// raw Chat Completions 回退沿用模型映射及归一化。
 	// 该回退不应用 compact_model_mapping。
 	if shouldForwardOpenAIResponsesViaRawChatCompletions(account) {
 		upstreamModel := resolveOpenAIForwardModel(account, requestedModel, "")
 		return normalizeOpenAIModelForUpstream(account, upstreamModel)
 	}
 
-	// Passthrough accounts only replace authentication. Their Forward path
-	// keeps the channel-mapped model in the request body and does not apply the
-	// account's normal model_mapping. Legacy /responses/compact is the one
-	// exception: forwardOpenAIPassthrough applies compact_model_mapping
-	// directly to that channel-mapped model.
+	// 透传应用显式账号映射，compact 专用规则优先；未命中时保留原名，不做 Codex 别名归一化。
 	if account != nil && account.IsOpenAIPassthroughEnabled() {
 		upstreamModel := strings.TrimSpace(requestedModel)
 		if upstreamModel == "" {
 			return ""
 		}
 		if requireCompact {
-			return resolveOpenAICompactForwardModel(account, upstreamModel)
+			if compactModel, matched := account.ResolveCompactMappedModel(upstreamModel); matched && strings.TrimSpace(compactModel) != "" {
+				return strings.TrimSpace(compactModel)
+			}
 		}
-		return upstreamModel
+		return strings.TrimSpace(account.GetMappedModel(upstreamModel))
 	}
 
 	// Compact mappings are keyed by the client-visible model. Prefer an exact
@@ -876,9 +874,7 @@ func ResolveOpenAIAccountUpstreamModelForRequest(account *Account, requestedMode
 // accounting, while upstreamModel is the model the scheduler has admitted.
 func resolveOpenAIForwardMappedModels(account *Account, requestedModel string, requireCompact bool) (billingModel, upstreamModel string) {
 	requestedModel = strings.TrimSpace(requestedModel)
-	if account != nil && account.IsOpenAIPassthroughEnabled() {
-		billingModel = requestedModel
-	} else if account != nil {
+	if account != nil {
 		billingModel = strings.TrimSpace(account.GetMappedModel(requestedModel))
 	}
 	if billingModel == "" {

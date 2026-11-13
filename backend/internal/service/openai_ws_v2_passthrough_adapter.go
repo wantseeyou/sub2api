@@ -17,6 +17,7 @@ import (
 	coderws "github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 type openAIWSClientFrameConn struct {
@@ -86,9 +87,7 @@ func (c *openAIWSPolicyEnforcingFrameConn) Close() error {
 	return c.inner.Close()
 }
 
-// openAIWSPassthroughPolicyModelForFrame returns the model actually forwarded
-// by a passthrough WS frame. Passthrough only replaces authentication, so an
-// account's ordinary model_mapping and Codex aliases must not rewrite it.
+// openAIWSPassthroughPolicyModelForFrame 解析透传帧的显式账号映射，不应用隐式 Codex 别名。
 func openAIWSPassthroughPolicyModelForFrame(account *Account, payload []byte) string {
 	if account == nil || len(payload) == 0 {
 		return ""
@@ -97,7 +96,7 @@ func openAIWSPassthroughPolicyModelForFrame(account *Account, payload []byte) st
 	if original == "" {
 		return ""
 	}
-	return original
+	return strings.TrimSpace(account.GetMappedModel(original))
 }
 
 // openAIWSPassthroughPolicyModelFromSessionFrame returns the upstream model
@@ -129,7 +128,7 @@ func openAIWSPassthroughPolicyModelFromSessionFrame(account *Account, payload []
 	if original == "" {
 		return ""
 	}
-	return original
+	return strings.TrimSpace(account.GetMappedModel(original))
 }
 
 type openAIWSPassthroughUsageMeta struct {
@@ -1118,6 +1117,12 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 					}
 				}
 			}
+			// 模型限制检查针对映射前的名称，避免映射目标被当作新的客户端请求拒绝。
+			if err := validateOpenAIPassthroughModels(account, payload); err != nil {
+				MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalModelConfiguration)
+				return payload, nil, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, err.Error(), err)
+			}
+			usageMeta.updateSessionRequestModel(payload)
 			// 在评估策略前先刷新 capturedSessionModel：客户端可能通过
 			// session.update 修改 session-level model（Realtime /
 			// Responses WS 协议允许），如果不刷新就会出现
@@ -1127,8 +1132,14 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			// 字段，response.create 自己的 model 仍然由其本帧字段决定。
 			if updated := openAIWSPassthroughPolicyModelFromSessionFrame(account, payload); updated != "" {
 				capturedSessionModel = updated
+				if updated != strings.TrimSpace(gjson.GetBytes(payload, "session.model").String()) {
+					mappedPayload, err := sjson.SetBytes(payload, "session.model", updated)
+					if err != nil {
+						return payload, nil, fmt.Errorf("set passthrough session model: %w", err)
+					}
+					payload = mappedPayload
+				}
 			}
-			usageMeta.updateSessionRequestModel(payload)
 			if requestModelForThisFrame == "" {
 				requestModelForThisFrame = usageMeta.requestModelForFrame(payload)
 			}
@@ -1143,10 +1154,6 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			}
 			if isResponseCreate && model != "" && model != strings.TrimSpace(gjson.GetBytes(payload, "model").String()) {
 				payload = s.ReplaceModelInBody(payload, model)
-			}
-			if err := validateOpenAIPassthroughModels(account, payload); err != nil {
-				MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalModelConfiguration)
-				return payload, nil, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, err.Error(), err)
 			}
 			out, blocked, policyErr := s.applyOpenAIFastPolicyToWSResponseCreate(ctx, account, model, payload)
 			// 多轮 passthrough usage：仅在成功（non-block / non-err）
@@ -1275,6 +1282,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 						ImageOutputTokens:        turn.Usage.ImageOutputTokens,
 					},
 					Model:                         turnRequestModel,
+					BillingModel:                  turnUpstreamModel,
 					UpstreamModel:                 openAIWSDifferentModel(turnRequestModel, turnUpstreamModel),
 					UpstreamResponseModel:         turn.ResponseModel,
 					UpstreamResponseModelConflict: turn.ResponseModelConflict,
@@ -1429,6 +1437,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			ImageOutputTokens:        relayResult.Usage.ImageOutputTokens,
 		},
 		Model:                         resultRequestModel,
+		BillingModel:                  resultUpstreamModel,
 		UpstreamModel:                 openAIWSDifferentModel(resultRequestModel, resultUpstreamModel),
 		UpstreamResponseModel:         relayResult.ResponseModel,
 		UpstreamResponseModelConflict: relayResult.ResponseModelConflict,

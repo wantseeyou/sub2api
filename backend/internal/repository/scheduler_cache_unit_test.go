@@ -1167,7 +1167,7 @@ func TestBuildSchedulerMetadataAccount_KeepsOpenAIPassthroughForModelGate(t *tes
 			require.True(t, restored.IsOpenAIPassthroughEnabled())
 			require.True(t, restored.IsModelSupported("gpt-5.4"))
 			require.False(t, restored.IsModelSupported("gpt-5.6-sol"))
-			require.Equal(t, "gpt-5.4", restored.GetMappedModel("gpt-5.4"))
+			require.Equal(t, "ignored-target", restored.GetMappedModel("gpt-5.4"))
 			require.Equal(t, map[string]any{"gpt-5.4": "ignored-target"}, restored.Credentials["model_mapping"])
 		})
 	}

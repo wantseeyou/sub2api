@@ -199,14 +199,14 @@ func TestFetchOpenAIModelsListRevalidatesUpstreamETag(t *testing.T) {
 	require.EqualValues(t, 2, calls.Load())
 }
 
-func TestProjectAccountModelsPassthroughAppliesWhitelistWithoutRemapping(t *testing.T) {
+func TestProjectAccountModelsPassthroughAppliesMappingAndWhitelist(t *testing.T) {
 	account := newCodexModelsAPIKeyTestAccount("https://models.example/v1")
 	account.Extra = map[string]any{"openai_passthrough": true}
-	account.Credentials["model_mapping"] = map[string]any{"live-model": "missing", "obsolete": "missing"}
+	account.Credentials["model_mapping"] = map[string]any{"client-alias": "live-model", "obsolete": "missing"}
 	body := []byte(`{"object":"list","data":[{"id":"live-model","owned_by":"provider"},{"id":"hidden-model"}]}`)
 	projected, err := projectAccountModelsBody(body, account, nil, false)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"object":"list","data":[{"id":"live-model","owned_by":"provider"}]}`, string(projected))
+	require.JSONEq(t, `{"object":"list","data":[{"id":"client-alias","display_name":"client-alias","owned_by":"provider"}]}`, string(projected))
 }
 
 func TestFetchOpenAIModelsListEmptyAndMalformedResponses(t *testing.T) {
