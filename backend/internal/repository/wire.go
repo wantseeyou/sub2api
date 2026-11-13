@@ -27,9 +27,9 @@ func ProvideConcurrencyCache(rdb *redis.Client, cfg *config.Config) service.Conc
 }
 
 // ProvideGitHubReleaseClient 创建 GitHub Release 客户端
-// 从配置中读取代理设置，支持国内服务器通过代理访问 GitHub
-func ProvideGitHubReleaseClient(cfg *config.Config) service.GitHubReleaseClient {
-	return NewGitHubReleaseClient(cfg.Update.ProxyURL, cfg.Security.ProxyFallback.AllowDirectOnError)
+// 后台选择即时生效，未设置时沿用启动配置。
+func ProvideGitHubReleaseClient(settings *service.SettingService) service.GitHubReleaseClient {
+	return &configuredGitHubReleaseClient{settings: settings}
 }
 
 // ProvidePricingRemoteClient 创建定价数据远程客户端

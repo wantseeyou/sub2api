@@ -99,6 +99,9 @@ func (s *SettingService) refreshCachedSettingsAfterWrite(ctx context.Context, se
 }
 
 func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, settings *SystemSettings) (map[string]string, error) {
+	if _, err := s.resolveUpdateProxyURL(ctx, settings.UpdateProxyID); err != nil {
+		return nil, err
+	}
 	if err := s.validateDefaultSubscriptionGroups(ctx, settings.DefaultSubscriptions); err != nil {
 		return nil, err
 	}
@@ -192,6 +195,8 @@ func (s *SettingService) buildSystemSettingsUpdates(ctx context.Context, setting
 	updates[SettingKeyLoginAgreementMode] = settings.LoginAgreementMode
 	updates[SettingKeyLoginAgreementUpdatedAt] = settings.LoginAgreementUpdatedAt
 	updates[SettingKeyLoginAgreementDocuments] = loginAgreementDocumentsJSON
+
+	updates[SettingKeyUpdateProxyID] = strconv.FormatInt(settings.UpdateProxyID, 10)
 
 	// 邮件服务设置（只有非空才更新密码）
 	updates[SettingKeySMTPHost] = settings.SMTPHost

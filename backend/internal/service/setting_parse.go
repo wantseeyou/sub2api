@@ -382,6 +382,14 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	)
 
 	// 解析整数类型
+	if value := strings.TrimSpace(settings[SettingKeyUpdateProxyID]); value != "" {
+		id, err := strconv.ParseInt(value, 10, 64)
+		if err != nil {
+			slog.Error("invalid persisted update proxy ID", "error", err)
+		} else {
+			result.UpdateProxyID = id
+		}
+	}
 	if port, err := strconv.Atoi(settings[SettingKeySMTPPort]); err == nil {
 		result.SMTPPort = port
 	} else {

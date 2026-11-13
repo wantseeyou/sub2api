@@ -1,5 +1,14 @@
 export default {
     settings: {
+      updateProxy: {
+        title: 'Update proxy',
+        description: 'Choose the connection for version checks, update packages and checksum files.',
+        direct: 'Direct connection (server)',
+        config: 'Use startup configuration (direct if unset)',
+        hint: 'Click Save Settings below to apply. Direct connection uses the server running Sub2API. An unavailable selected proxy returns an error.',
+        unavailable: 'Proxy #{id} (not loaded or unavailable)',
+        loadFailed: 'Failed to load proxies. Your current selection has been preserved.',
+      },
       gatewayTimezone: {
         title: 'Gateway Timezone',
         description: 'Set the gateway timezone and compare it with the server’s public exit location.',

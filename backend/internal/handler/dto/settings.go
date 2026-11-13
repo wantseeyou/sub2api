@@ -50,6 +50,7 @@ type SystemSettings struct {
 	LoginAgreementUpdatedAt             string                   `json:"login_agreement_updated_at"`
 	LoginAgreementDocuments             []LoginAgreementDocument `json:"login_agreement_documents"`
 
+	UpdateProxyID          int64  `json:"update_proxy_id"` // 更新代理：0 沿用配置，-1 直连，正数为代理 ID。
 	SMTPHost               string `json:"smtp_host"`
 	SMTPPort               int    `json:"smtp_port"`
 	SMTPUsername           string `json:"smtp_username"`
