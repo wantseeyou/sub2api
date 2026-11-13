@@ -91,7 +91,7 @@ func TestIsModelSupported_OpenAIOAuthPassthroughAllowsAll(t *testing.T) {
 func TestIsModelSupported_OpenAIOAuthPassthroughRespectsMapping(t *testing.T) {
 	account := newOpenAIOAuthAccountForModelTest()
 	account.Extra = map[string]any{"openai_passthrough": true}
-	// 透传时仍使用配置键筛选账号，但不将请求改写为映射目标。
+	// 透传时使用配置键筛选账号，并将请求改写为映射目标。
 	account.Credentials = map[string]any{
 		"model_mapping": map[string]any{"gpt-5.4": "ignored-target"},
 	}
@@ -99,7 +99,7 @@ func TestIsModelSupported_OpenAIOAuthPassthroughRespectsMapping(t *testing.T) {
 	require.True(t, account.IsModelSupported("gpt-5.4"))
 	require.False(t, account.IsModelSupported("gpt-5.6-sol"), "透传不能绕过账号模型准入")
 	require.False(t, account.IsModelSupported("deepseek-v4"))
-	require.Equal(t, "gpt-5.4", account.GetMappedModel("gpt-5.4"))
+	require.Equal(t, "ignored-target", account.GetMappedModel("gpt-5.4"))
 }
 
 func TestIsModelSupported_OpenAIAPIKeyEmptyMappingAllowsAll(t *testing.T) {

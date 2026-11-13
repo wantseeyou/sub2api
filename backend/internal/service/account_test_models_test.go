@@ -235,18 +235,18 @@ func TestFetchOpenAIAccountModelsOAuthPassthroughIgnoresMappingTargets(t *testin
 	}
 }
 
-func TestFetchOpenAIAccountModelsAPIKeyPassthroughFiltersWithoutRemapping(t *testing.T) {
+func TestFetchOpenAIAccountModelsAPIKeyPassthroughAppliesMapping(t *testing.T) {
 	gateway := newCodexModelsAPIKeyTestService(&codexModelsHTTPUpstreamStub{do: func(_ *http.Request, _ string, _ int64, _ int) (*http.Response, error) {
 		return ordinaryModelsUpstreamResponse(`{"data":[{"id":"target"},{"id":"other"}]}`), nil
 	}})
 	svc := &AccountTestService{openaiGatewayService: gateway}
 	account := newCodexModelsAPIKeyTestAccount("https://models.example/v1")
 	account.Extra = map[string]any{"openai_passthrough": true}
-	account.Credentials["model_mapping"] = map[string]any{"target": "ignored-target", "paint": "gpt-image-2.5-flare"}
+	account.Credentials["model_mapping"] = map[string]any{"client-alias": "target", "paint": "gpt-image-2.5-flare"}
 
 	models, err := svc.FetchOpenAIAccountModels(context.Background(), account)
 	require.NoError(t, err)
-	require.Equal(t, []string{"target"}, pickerModelIDs(models))
+	require.Equal(t, []string{"client-alias"}, pickerModelIDs(models))
 }
 
 func TestFetchOpenAIAccountModelsMappingChangesReuseRawCache(t *testing.T) {

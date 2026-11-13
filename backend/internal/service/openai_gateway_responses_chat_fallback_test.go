@@ -119,7 +119,7 @@ func TestForwardResponses_ForceChatCompletionsOmitsNoneReasoningEffort(t *testin
 	require.Nil(t, result.ReasoningEffort)
 }
 
-func TestForwardResponses_PassthroughFlagWithUnsupportedResponsesPreservesRequestModel(t *testing.T) {
+func TestForwardResponses_PassthroughFlagWithUnsupportedResponsesAppliesAccountMapping(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	for _, path := range []string{"/v1/responses", "/v1/responses/compact"} {
@@ -158,7 +158,7 @@ func TestForwardResponses_PassthroughFlagWithUnsupportedResponsesPreservesReques
 			require.NoError(t, err)
 			require.NotNil(t, result)
 			require.Equal(t, "http://upstream.example/v1/chat/completions", upstream.lastReq.URL.String())
-			require.Equal(t, "gpt-5.4-channel", gjson.GetBytes(upstream.lastBody, "model").String())
+			require.Equal(t, "gpt-5.4-account", gjson.GetBytes(upstream.lastBody, "model").String())
 		})
 	}
 }

@@ -262,11 +262,11 @@ func TestResolveOpenAIForwardMappedModels_CompactMappingPrecedence(t *testing.T)
 			wantUpstream:   "gpt-5.4-openai-compact",
 		},
 		{
-			name: "passthrough ignores ordinary mapping",
+			name: "passthrough keeps compact priority over ordinary mapping",
 			account: &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth,
 				Credentials: conflictingMappings, Extra: map[string]any{"openai_passthrough": true}},
 			requireCompact: true,
-			wantBilling:    "gpt-5.5",
+			wantBilling:    "gpt-5.4",
 			wantUpstream:   "gpt-5.5-openai-compact",
 		},
 		{
@@ -309,12 +309,12 @@ func TestCanonicalOpenAIAccountSchedulingModelMatchesForwardSemantics(t *testing
 			want:    "gpt-5.6-sol",
 		},
 		{
-			name: "OpenAI passthrough ignores ordinary account mapping",
+			name: "OpenAI passthrough applies ordinary account mapping",
 			account: &Account{Platform: PlatformOpenAI, Type: AccountTypeOAuth,
 				Credentials: map[string]any{"model_mapping": map[string]any{"public": "private"}},
 				Extra:       map[string]any{"openai_passthrough": true}},
 			model: "public",
-			want:  "public",
+			want:  "private",
 		},
 		{
 			name:    "Grok OAuth does not inherit OpenAI Codex aliases",

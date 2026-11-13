@@ -394,7 +394,7 @@ func TestPolicyEnforcingFrameConn_FollowupFrameWithoutModelUsesCapturedModel(t *
 	require.Equal(t, "response.create", gjson.GetBytes(payload, "type").String())
 }
 
-func TestOpenAIWSPassthroughPolicyModelDoesNotApplyAccountMapping(t *testing.T) {
+func TestOpenAIWSPassthroughPolicyModelAppliesAccountMapping(t *testing.T) {
 	account := &Account{
 		Platform: PlatformOpenAI,
 		Type:     AccountTypeOAuth,
@@ -405,10 +405,10 @@ func TestOpenAIWSPassthroughPolicyModelDoesNotApplyAccountMapping(t *testing.T) 
 	}
 
 	responseCreate := []byte(`{"type":"response.create","model":"public-model"}`)
-	require.Equal(t, "public-model", openAIWSPassthroughPolicyModelForFrame(account, responseCreate))
+	require.Equal(t, "private-model", openAIWSPassthroughPolicyModelForFrame(account, responseCreate))
 
 	sessionUpdate := []byte(`{"type":"session.update","session":{"model":"public-model"}}`)
-	require.Equal(t, "public-model", openAIWSPassthroughPolicyModelFromSessionFrame(account, sessionUpdate))
+	require.Equal(t, "private-model", openAIWSPassthroughPolicyModelFromSessionFrame(account, sessionUpdate))
 }
 
 // TestPolicyEnforcingFrameConn_WithoutCapturedFallbackPolicyMisses pins the

@@ -171,8 +171,8 @@ func TestIsUpstreamModelRestrictedByChannel_PassthroughMatchesForwardPath(t *tes
 		useCompactModelMapping bool
 	}{
 		{
-			name:                   "native v2 keeps channel-mapped model and ignores normal account mapping",
-			allowedUpstreamModel:   "gpt-5.4-channel",
+			name:                   "native v2 applies account mapping after channel mapping",
+			allowedUpstreamModel:   "gpt-5.4-account",
 			useCompactModelMapping: false,
 		},
 		{
@@ -251,7 +251,7 @@ func TestIsUpstreamModelRestrictedByChannel_PassthroughFlagWithRawChatFallbackMa
 				RestrictModels:     true,
 				BillingModelSource: BillingModelSourceUpstream,
 				ModelPricing: []ChannelModelPricing{
-					{Platform: PlatformOpenAI, Models: []string{"gpt-5.4-channel"}},
+					{Platform: PlatformOpenAI, Models: []string{"gpt-5.4-account"}},
 				},
 				ModelMapping: map[string]map[string]string{
 					PlatformOpenAI: {"gpt-5.4": "gpt-5.4-channel"},
@@ -292,7 +292,7 @@ func TestIsUpstreamModelRestrictedByChannel_ForwardModelContextMatchesNormalForw
 		RestrictModels:     true,
 		BillingModelSource: BillingModelSourceUpstream,
 		ModelPricing: []ChannelModelPricing{
-			{Platform: PlatformOpenAI, Models: []string{"gpt-5.4-channel"}},
+			{Platform: PlatformOpenAI, Models: []string{"gpt-5.4-account"}},
 		},
 		ModelMapping: map[string]map[string]string{
 			PlatformOpenAI: {"gpt-5.4": "gpt-5.4-channel"},
