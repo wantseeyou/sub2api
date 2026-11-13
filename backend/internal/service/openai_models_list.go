@@ -237,10 +237,6 @@ func projectAccountModelAliases(body []byte, account *Account, group *Group, cod
 			continue
 		}
 		target, matched := account.ResolveMappedModel(id)
-		if passthrough {
-			// Filtering changes eligibility, never the upstream/public model name.
-			target, matched = id, account.IsModelSupported(id)
-		}
 		raw, available := byID[strings.TrimSpace(target)]
 		if !matched || !available {
 			continue

@@ -209,16 +209,17 @@ func TestProjectAccountModelsPassthroughAppliesMappingAndWhitelist(t *testing.T)
 	require.JSONEq(t, `{"object":"list","data":[{"id":"client-alias","display_name":"client-alias","owned_by":"provider"}]}`, string(projected))
 }
 
-func TestProjectAccountModelsPassthroughFilterKeepsSourceNames(t *testing.T) {
+// TestProjectAccountModelsPassthroughProjectsAliases 验证旧筛选标记不会阻止按映射生成公开目录。
+func TestProjectAccountModelsPassthroughProjectsAliases(t *testing.T) {
 	for _, codex := range []bool{false, true} {
 		t.Run(fmt.Sprint(codex), func(t *testing.T) {
 			account := newCodexModelsAPIKeyTestAccount("https://models.example/v1")
 			account.Extra = map[string]any{"openai_passthrough": true, "openai_passthrough_model_filter": true}
 			account.Credentials["model_mapping"] = map[string]any{
-				"qwen3.8-max": "must-not-rewrite", "qwen3.8-*": "also-not-a-model", "absent-alias": "gpt-6.1-sol",
+				"qwen-alias": "qwen3.8-max", "qwen3.8-plus": "qwen3.8-plus", "absent-alias": "missing-model",
 			}
 			body := `{"object":"list","data":[{"id":"qwen3.8-max","display_name":"Qwen Max"},{"id":"qwen3.8-plus"},{"id":"gpt-6.1-sol"}]}`
-			want := `{"object":"list","data":[{"id":"qwen3.8-max","display_name":"Qwen Max"},{"id":"qwen3.8-plus"}]}`
+			want := `{"object":"list","data":[{"id":"qwen3.8-plus"},{"id":"qwen-alias","display_name":"qwen-alias"}]}`
 			if codex {
 				body = strings.NewReplacer(`"data"`, `"models"`, `"id"`, `"slug"`).Replace(body)
 				want = strings.NewReplacer(`"data"`, `"models"`, `"id"`, `"slug"`).Replace(want)

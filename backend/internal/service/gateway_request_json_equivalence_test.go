@@ -399,7 +399,7 @@ func TestSyncBillingHeaderVersionMatchesLegacy(t *testing.T) {
 	for _, raw := range bodies {
 		for _, ua := range []string{"", "claude-cli/2.1.200 (external, cli)", "curl/8"} {
 			want := legacySyncBillingHeaderVersion(append([]byte(nil), raw...), ua)
-			got := syncBillingHeaderVersion(append([]byte(nil), raw...), ua)
+			got := syncBillingHeaderVersion(append([]byte(nil), raw...), ua, nil)
 			require.Equal(t, string(want), string(got), "%s ua=%s", raw, ua)
 		}
 	}

@@ -42,6 +42,8 @@ type UpdateSettingsRequest struct {
 	LoginAgreementUpdatedAt             string                       `json:"login_agreement_updated_at"`
 	LoginAgreementDocuments             []dto.LoginAgreementDocument `json:"login_agreement_documents"`
 
+	UpdateProxyID int64 `json:"update_proxy_id"` // 更新代理：0 沿用配置，-1 直连，正数为代理 ID。
+
 	// 邮件服务设置
 	SMTPHost     string `json:"smtp_host"`
 	SMTPPort     int    `json:"smtp_port"`
@@ -1558,6 +1560,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		LoginAgreementMode:                  loginAgreementMode,
 		LoginAgreementUpdatedAt:             loginAgreementUpdatedAt,
 		LoginAgreementDocuments:             loginAgreementDocuments,
+		UpdateProxyID:                       req.UpdateProxyID,
 		SMTPHost:                            req.SMTPHost,
 		SMTPPort:                            req.SMTPPort,
 		SMTPUsername:                        req.SMTPUsername,
@@ -2270,6 +2273,7 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 		LoginAgreementMode:                                     updatedSettings.LoginAgreementMode,
 		LoginAgreementUpdatedAt:                                updatedSettings.LoginAgreementUpdatedAt,
 		LoginAgreementDocuments:                                loginAgreementDocumentsToDTO(updatedSettings.LoginAgreementDocuments),
+		UpdateProxyID:                                          updatedSettings.UpdateProxyID,
 		SMTPHost:                                               updatedSettings.SMTPHost,
 		SMTPPort:                                               updatedSettings.SMTPPort,
 		SMTPUsername:                                           updatedSettings.SMTPUsername,

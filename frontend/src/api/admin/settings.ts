@@ -517,6 +517,8 @@ export interface SystemSettings {
   backend_mode_enabled: boolean;
   custom_menu_items: CustomMenuItem[];
   custom_endpoints: CustomEndpoint[];
+  // 更新代理：0 沿用启动配置，-1 本机直连，正数为代理 ID。
+  update_proxy_id?: number;
   // SMTP settings
   smtp_host: string;
   smtp_port: number;
@@ -878,6 +880,7 @@ export interface UpdateSettingsRequest {
   backend_mode_enabled?: boolean;
   custom_menu_items?: CustomMenuItem[];
   custom_endpoints?: CustomEndpoint[];
+  update_proxy_id?: number;
   smtp_host?: string;
   smtp_port?: number;
   smtp_username?: string;

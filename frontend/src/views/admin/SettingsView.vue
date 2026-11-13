@@ -6397,6 +6397,7 @@
 
         <!-- Tab: General -->
         <div v-show="activeTab === 'general'" class="space-y-6">
+          <UpdateProxySettings v-model="form.update_proxy_id" />
           <!-- Site Settings -->
           <div class="card">
             <div
@@ -9099,6 +9100,7 @@ import GroupBadge from "@/components/common/GroupBadge.vue";
 import GroupOptionItem from "@/components/common/GroupOptionItem.vue";
 import Toggle from "@/components/common/Toggle.vue";
 import ProxySelector from "@/components/common/ProxySelector.vue";
+import UpdateProxySettings from "@/components/admin/settings/UpdateProxySettings.vue";
 import ImageUpload from "@/components/common/ImageUpload.vue";
 import BackupSettings from "@/views/admin/BackupView.vue";
 import EmailTemplateEditor from "@/views/admin/settings/EmailTemplateEditor.vue";
@@ -9948,6 +9950,7 @@ const form = reactive<SettingsForm>({
     description: string;
   }>,
   frontend_url: "",
+  update_proxy_id: 0,
   smtp_host: "",
   smtp_port: 587,
   smtp_username: "",
@@ -11627,6 +11630,7 @@ async function saveSettings() {
       custom_menu_items: form.custom_menu_items,
       custom_endpoints: form.custom_endpoints,
       frontend_url: form.frontend_url,
+      update_proxy_id: form.update_proxy_id,
       smtp_host: form.smtp_host,
       smtp_port: form.smtp_port,
       smtp_username: form.smtp_username,

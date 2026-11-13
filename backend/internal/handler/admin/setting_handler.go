@@ -154,6 +154,7 @@ func (h *SettingHandler) GetSettings(c *gin.Context) {
 		LoginAgreementMode:                                     settings.LoginAgreementMode,
 		LoginAgreementUpdatedAt:                                settings.LoginAgreementUpdatedAt,
 		LoginAgreementDocuments:                                loginAgreementDocumentsToDTO(settings.LoginAgreementDocuments),
+		UpdateProxyID:                                          settings.UpdateProxyID,
 		SMTPHost:                                               settings.SMTPHost,
 		SMTPPort:                                               settings.SMTPPort,
 		SMTPUsername:                                           settings.SMTPUsername,

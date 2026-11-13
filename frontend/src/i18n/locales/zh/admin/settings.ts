@@ -1,5 +1,14 @@
 export default {
     settings: {
+      updateProxy: {
+        title: '更新代理',
+        description: '选择检查版本、下载更新包和校验文件时使用的网络线路。',
+        direct: '本机直连（服务器）',
+        config: '沿用启动配置（未配置时直连）',
+        hint: '点击页面底部“保存设置”后生效。本机指运行 Sub2API 的服务器；所选代理不可用时会报错。',
+        unavailable: '代理 #{id}（未加载或不可用）',
+        loadFailed: '加载代理列表失败，已保留当前选择。',
+      },
       title: '系统设置',
       description: '管理注册、邮箱验证、默认值和 SMTP 设置',
       gatewayTimezone: {

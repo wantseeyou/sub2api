@@ -129,11 +129,12 @@ func TestOpenAIPassthroughModelFilterMixedPoolSelection(t *testing.T) {
 	}
 }
 
-func TestOpenAIPassthroughModelFilterPreservesForwardBody(t *testing.T) {
+// TestOpenAIPassthroughModelFilterPreservesForwardBodyExceptModel 验证透传只改写已配置的模型名。
+func TestOpenAIPassthroughModelFilterPreservesForwardBodyExceptModel(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	accounts := passthroughModelFilterAccounts(true, 2)
 	accounts[0].Extra["openai_passthrough_model_filter"] = true
-	accounts[0].Credentials["model_mapping"] = map[string]any{"qwen3.8-max": "must-not-rewrite"}
+	accounts[0].Credentials["model_mapping"] = map[string]any{"qwen3.8-max": "qwen-upstream"}
 	repo := schedulerTestOpenAIAccountRepo{accounts: accounts}
 	body := []byte(`{ "model": "qwen3.8-max", "input":"synthetic query", "tools":[{"type":"web_search"}], "stream":false }`)
 	c, _ := gin.CreateTestContext(httptest.NewRecorder())
@@ -151,7 +152,8 @@ func TestOpenAIPassthroughModelFilterPreservesForwardBody(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, result)
 	require.NotNil(t, upstream.lastReq)
-	require.Equal(t, body, upstream.lastBody, "whitelist filtering must not activate model rewriting")
+	want := strings.Replace(string(body), `"qwen3.8-max"`, `"qwen-upstream"`, 1)
+	require.JSONEq(t, want, string(upstream.lastBody))
 	require.Equal(t, "https://bailian.example/v1/responses", upstream.lastReq.URL.String())
 }
 
