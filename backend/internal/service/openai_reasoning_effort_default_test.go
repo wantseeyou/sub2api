@@ -69,11 +69,12 @@ func TestOpenAIDefaultReasoningEffort_HTTPForwarding(t *testing.T) {
 					fieldPath = "output_config.effort"
 				}
 				if tc.fields != "" {
-					if fieldPath == "reasoning_effort" {
+					switch fieldPath {
+					case "reasoning_effort":
 						body = strings.TrimSuffix(body, "}") + `,"reasoning_effort":` + tc.fields + `}`
-					} else if fieldPath == "output_config.effort" {
+					case "output_config.effort":
 						body = strings.TrimSuffix(body, "}") + `,"output_config":{"effort":` + tc.fields + `}}`
-					} else {
+					default:
 						body = strings.TrimSuffix(body, "}") + `,"reasoning":{"summary":"auto","effort":` + tc.fields + `}}`
 					}
 				}
@@ -98,11 +99,12 @@ func TestOpenAIDefaultReasoningEffort_HTTPForwarding(t *testing.T) {
 				c.Request = httptest.NewRequest(http.MethodPost, path, strings.NewReader(body)).WithContext(ctx)
 				var result *OpenAIForwardResult
 				var err error
-				if path == "/v1/chat/completions" {
+				switch path {
+				case "/v1/chat/completions":
 					result, err = svc.ForwardAsChatCompletions(ctx, c, account, []byte(body), "", "")
-				} else if path == "/v1/messages" {
+				case "/v1/messages":
 					result, err = svc.ForwardAsAnthropic(ctx, c, account, []byte(body), "", "")
-				} else {
+				default:
 					result, err = svc.Forward(ctx, c, account, []byte(body))
 				}
 				require.NoError(t, err)
@@ -186,7 +188,7 @@ func TestOpenAIDefaultReasoningEffort_WebSocketForwarding(t *testing.T) {
 						done <- err
 						return
 					}
-					defer conn.CloseNow()
+					defer func() { _ = conn.CloseNow() }()
 					readCtx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
 					_, first, err := conn.Read(readCtx)
 					cancel()
@@ -203,14 +205,15 @@ func TestOpenAIDefaultReasoningEffort_WebSocketForwarding(t *testing.T) {
 				defer cancel()
 				client, _, err := coderws.Dial(ctx, "ws"+strings.TrimPrefix(server.URL, "http"), nil)
 				require.NoError(t, err)
-				defer client.CloseNow()
+				defer func() { _ = client.CloseNow() }()
 				require.NoError(t, client.Write(ctx, coderws.MessageText, []byte(`{"type":"response.create","model":"public","input":"hi"}`)))
 				_, response, err := client.Read(ctx)
 				require.NoError(t, err)
 				require.Equal(t, "response.completed", gjson.GetBytes(response, "type").String())
 				_ = client.Close(coderws.StatusNormalClosure, "done")
 				select {
-				case <-done:
+				case err := <-done:
+					require.NoError(t, err)
 				case <-ctx.Done():
 					t.Fatal("等待 WS 会话结束超时")
 				}
@@ -238,7 +241,7 @@ func TestOpenAIDefaultReasoningEffort_WebSocketFollowup(t *testing.T) {
 				if err != nil {
 					return
 				}
-				defer conn.CloseNow()
+				defer func() { _ = conn.CloseNow() }()
 				for turn := 1; turn <= 2; turn++ {
 					_, payload, err := conn.Read(r.Context())
 					if err != nil {
@@ -275,7 +278,7 @@ func TestOpenAIDefaultReasoningEffort_WebSocketFollowup(t *testing.T) {
 					done <- err
 					return
 				}
-				defer conn.CloseNow()
+				defer func() { _ = conn.CloseNow() }()
 				_, first, err := conn.Read(r.Context())
 				if err != nil {
 					done <- err
@@ -290,7 +293,7 @@ func TestOpenAIDefaultReasoningEffort_WebSocketFollowup(t *testing.T) {
 			defer cancel()
 			client, _, err := coderws.Dial(ctx, "ws"+strings.TrimPrefix(gatewayServer.URL, "http"), nil)
 			require.NoError(t, err)
-			defer client.CloseNow()
+			defer func() { _ = client.CloseNow() }()
 			for i, frame := range []string{`{"type":"response.create","model":"public","input":"first"}`, `{"type":"response.create","input":"second"}`} {
 				require.NoError(t, client.Write(ctx, coderws.MessageText, []byte(frame)))
 				_, response, err := client.Read(ctx)
@@ -306,7 +309,8 @@ func TestOpenAIDefaultReasoningEffort_WebSocketFollowup(t *testing.T) {
 			}
 			_ = client.Close(coderws.StatusNormalClosure, "done")
 			select {
-			case <-done:
+			case err := <-done:
+				require.NoError(t, err)
 			case <-ctx.Done():
 				t.Fatal("等待 WS 会话结束超时")
 			}
