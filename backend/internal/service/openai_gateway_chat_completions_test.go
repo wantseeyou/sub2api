@@ -19,6 +19,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 type openAIChatFailingWriter struct {
@@ -81,7 +82,9 @@ func TestForwardAsChatCompletions_ResponsesSupportedFallsBackWhenStructuredInput
 			require.Equal(t, "/v1/responses", upstream.requests[0].URL.Path)
 			require.True(t, gjson.GetBytes(upstream.bodies[0], "input").IsArray())
 			require.Equal(t, "/v1/chat/completions", upstream.requests[1].URL.Path)
-			require.JSONEq(t, string(body), string(upstream.bodies[1]))
+			expectedBody, err := sjson.SetBytes(body, "reasoning_effort", "high")
+			require.NoError(t, err)
+			require.JSONEq(t, string(expectedBody), string(upstream.bodies[1]))
 			require.Equal(t, originalBody, body)
 			require.Equal(t, "/v1/chat/completions", result.UpstreamEndpoint)
 			require.Equal(t, "/v1/chat/completions", GetActualOpenAIUpstreamEndpoint(c))

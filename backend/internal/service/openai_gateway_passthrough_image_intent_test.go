@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 func TestOpenAIGatewayService_APIKeyPassthrough_ImageIntentPreservesGateAndBilling(t *testing.T) {
@@ -50,7 +51,10 @@ func TestOpenAIGatewayService_APIKeyPassthrough_ImageIntentPreservesGateAndBilli
 		require.NoError(t, err)
 		require.NotNil(t, result)
 		require.NotNil(t, upstream.lastReq)
-		require.Equal(t, body, upstream.lastBody)
+		require.Equal(t, "high", gjson.GetBytes(upstream.lastBody, "reasoning.effort").String())
+		forwardedWithoutDefault, err := sjson.DeleteBytes(upstream.lastBody, "reasoning")
+		require.NoError(t, err)
+		require.Equal(t, body, forwardedWithoutDefault)
 		require.Equal(t, 1, result.ImageCount)
 		require.Equal(t, "gpt-image-2", result.BillingModel)
 		require.Equal(t, "2K", result.ImageSize)

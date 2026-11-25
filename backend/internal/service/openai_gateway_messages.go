@@ -25,6 +25,7 @@ import (
 // to OpenAI Responses API format, forwards to the OpenAI upstream, and converts
 // the response back to Anthropic Messages format. This enables Claude Code
 // clients to access OpenAI models through the standard /v1/messages endpoint.
+// OpenAI 推理模型的缺省等级为 high，显式关闭推理和显式等级沿用客户端选择。
 func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	ctx context.Context,
 	c *gin.Context,
@@ -43,6 +44,19 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		body = sanitized
 	}
 	rememberOpenCodeInboundBody(c, body)
+	defaultBody, defaulted, defaultErr := applyOpenAIReasoningEffortDefault(ctx, account, body, resolveMappedUpstreamModel(account, body, defaultMappedModel), "output_config.effort")
+	if defaultErr != nil {
+		if IsReasoningEffortPolicyDenied(defaultErr) {
+			MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
+			writeAnthropicError(c, http.StatusForbidden, "forbidden_error", defaultErr.Error())
+		}
+		return nil, defaultErr
+	}
+	if defaulted {
+		body = defaultBody
+		// 新增默认值已完成一次映射与上限校验，转换后的等级不能再次套用映射。
+		ctx = WithOpenAIReasoningEffortPolicy(ctx, "", nil, "")
+	}
 	beginUpstreamResponseModelObservation(c)
 	ClearActualOpenAIUpstreamEndpoint(c)
 	// Web Search 模拟：Chat Completions 转换会丢掉 web_search 工具，纯 web_search
@@ -172,6 +186,16 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		responsesReq.ServiceTier = "priority"
 	}
 
+	// 3c. ChatGPT/Codex accounts whose model supports tool_search get Claude
+	// Code's ToolSearch as the native protocol, keeping deferred tools out of
+	// the top-level tools.
+	if account.UsesOpenAICodexProtocol() && account.Platform != PlatformGrok &&
+		string(accountCodexToolCapabilities(account, upstreamModel)["supports_search_tool"]) == "true" {
+		if err := apicompat.ApplyNativeToolSearch(&anthropicReq, responsesReq); err != nil {
+			return nil, fmt.Errorf("apply native tool_search: %w", err)
+		}
+	}
+
 	responsesReq.Model = upstreamModel
 	if responsesReq.Reasoning != nil {
 		responsesReq.Reasoning.Effort = openAICompatAnthropicReasoningEffort(&anthropicReq, upstreamModel, responsesReq.Reasoning.Effort)
@@ -214,12 +238,18 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		logFields = append(logFields, zap.Bool("compat_turn_state_attached", true))
 	}
 	logger.L().Debug("openai messages: model mapping applied", logFields...)
+	if account.Platform == PlatformOpenAI {
+		apicompat.IncludeWebSearchSources(responsesReq)
+	}
 
 	// 4. Marshal Responses request body, then apply the ChatGPT/Codex transform.
 	responsesBody, err := json.Marshal(responsesReq)
 	if err != nil {
 		return nil, fmt.Errorf("marshal responses request: %w", err)
 	}
+	// responsesReq lives until billing after the stream; only its scalar
+	// fields are read from here on, so drop the body-sized input.
+	responsesReq.Input = nil
 
 	if account.UsesOpenAICodexProtocol() && account.Platform != PlatformGrok {
 		var reqBody map[string]any
@@ -835,6 +865,7 @@ func (s *OpenAIGatewayService) readOpenAICompatBufferedTerminal(
 ) (*apicompat.ResponsesResponse, OpenAIUsage, *apicompat.BufferedResponseAccumulator, openAICompatPriorModelAudit, error) {
 	acc := apicompat.NewBufferedResponseAccumulator()
 	acc.XAIServerSideSearch = account != nil && account.IsGrok()
+	outputSlots := &openAICompatOutputSlots{xaiServerSideSearch: acc.XAIServerSideSearch}
 	var usage OpenAIUsage
 	if resp == nil || resp.Body == nil {
 		return nil, usage, acc, openAICompatPriorModelAudit{}, errors.New("upstream response body is nil")
@@ -923,6 +954,7 @@ func (s *OpenAIGatewayService) readOpenAICompatBufferedTerminal(
 				if frame, ok := parser.Finish(); ok {
 					payload := openAICompatPayloadWithEventType(frame.Data, frame.EventType)
 					payload = string(restoreCodexToolNamesFromContext(c, []byte(payload)))
+					outputSlots.Observe([]byte(payload))
 					var event apicompat.ResponsesStreamEvent
 					if err := json.Unmarshal([]byte(payload), &event); err == nil {
 						s.parseSSEUsageBytesWithType([]byte(payload), event.Type, &usage)
@@ -938,6 +970,7 @@ func (s *OpenAIGatewayService) readOpenAICompatBufferedTerminal(
 							if response.Usage != nil {
 								usage = copyOpenAIUsageFromResponsesUsage(response.Usage)
 							}
+							outputSlots.fillTerminalOutput(event.Type, response)
 							return response, usage, acc, prior, nil
 						}
 					}
@@ -964,6 +997,7 @@ func (s *OpenAIGatewayService) readOpenAICompatBufferedTerminal(
 			}
 			payload := openAICompatPayloadWithEventType(frame.Data, frame.EventType)
 			payload = string(restoreCodexToolNamesFromContext(c, []byte(payload)))
+			outputSlots.Observe([]byte(payload))
 
 			var event apicompat.ResponsesStreamEvent
 			if err := json.Unmarshal([]byte(payload), &event); err != nil {
@@ -988,6 +1022,7 @@ func (s *OpenAIGatewayService) readOpenAICompatBufferedTerminal(
 				if response.Usage != nil {
 					usage = copyOpenAIUsageFromResponsesUsage(response.Usage)
 				}
+				outputSlots.fillTerminalOutput(event.Type, response)
 				return response, usage, acc, prior, nil
 			}
 
@@ -1117,6 +1152,7 @@ func (s *OpenAIGatewayService) handleAnthropicStreamingResponse(
 		}
 		if countSearch {
 			searchCount += countGrokNativeSearchCallsInSSEDataDedup([]byte(payload), streamSearchSeen)
+			searchCount = grokSearchCountWithTerminalUsage(searchCount, []byte(payload))
 		}
 
 		var event apicompat.ResponsesStreamEvent

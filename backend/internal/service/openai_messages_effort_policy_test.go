@@ -33,13 +33,14 @@ func TestMessagesEffortPolicyHTTP(t *testing.T) {
 					want       string
 					status     int
 				}{
-					{name: "omitted unchanged", want: "medium"},
-					{name: "omitted unrelated mapping unchanged", mappings: []ReasoningEffortMapping{{From: "medium", To: "low"}}, want: "medium"},
-					{name: "omitted ceiling unchanged", ceiling: "low", want: "medium"},
-					{name: "omitted deny ceiling unchanged", ceiling: "low", overLimit: ReasoningEffortOverLimitDeny, want: "medium"},
-					{name: "omitted none mapping and ceiling unchanged", mappings: noneToLow, ceiling: "low", want: "medium"},
-					{name: "omitted above ceiling none mapping leaves default", mappings: []ReasoningEffortMapping{{From: "none", To: "xhigh"}}, ceiling: "low", overLimit: ReasoningEffortOverLimitDeny, want: "medium"},
-					{name: "omitted none mapping leaves default", mappings: noneToLow, want: "medium"},
+					{name: "omitted defaults high", want: "high"},
+					{name: "omitted unrelated mapping keeps high", mappings: []ReasoningEffortMapping{{From: "medium", To: "low"}}, want: "high"},
+					{name: "omitted ceiling caps high", ceiling: "low", want: "low"},
+					{name: "omitted deny ceiling rejects high", ceiling: "low", overLimit: ReasoningEffortOverLimitDeny, status: 403},
+					{name: "omitted none mapping does not bypass ceiling", mappings: noneToLow, ceiling: "low", want: "low"},
+					{name: "omitted above ceiling denied without none mapping", mappings: []ReasoningEffortMapping{{From: "none", To: "xhigh"}}, ceiling: "low", overLimit: ReasoningEffortOverLimitDeny, status: 403},
+					{name: "omitted none mapping leaves high default", mappings: noneToLow, want: "high"},
+					{name: "omitted maps high once", mappings: []ReasoningEffortMapping{{From: "high", To: "medium"}, {From: "medium", To: "low"}}, want: "medium"},
 					{name: "disabled omitted mapped", preference: `,"thinking":{"type":"disabled"}`, mappings: noneToLow, want: "low"},
 					{name: "disabled synthesized ceiling downgrade", preference: `,"thinking":{"type":"disabled"}`, mappings: []ReasoningEffortMapping{{From: "none", To: "high"}}, ceiling: "low", want: "low"},
 					{name: "disabled synthesized ceiling deny", preference: `,"thinking":{"type":"disabled"}`, mappings: []ReasoningEffortMapping{{From: "none", To: "high"}}, ceiling: "low", overLimit: ReasoningEffortOverLimitDeny, status: 403},

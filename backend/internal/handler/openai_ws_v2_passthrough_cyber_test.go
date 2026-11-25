@@ -16,6 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 type openAIWSPassthroughHandlerHarness struct {
@@ -320,7 +321,10 @@ func TestOpenAIResponsesWebSocketV2PassthroughNonCyberTurnAllowsFollowup(t *test
 	}
 	select {
 	case second := <-secondUpstreamFrame:
-		require.JSONEq(t, secondPayload, string(second))
+		require.Equal(t, "high", gjson.GetBytes(second, "reasoning.effort").String())
+		withoutDefault, err := sjson.DeleteBytes(second, "reasoning")
+		require.NoError(t, err)
+		require.JSONEq(t, secondPayload, string(withoutDefault))
 	default:
 		t.Fatal("non-cyber follow-up did not reach upstream")
 	}

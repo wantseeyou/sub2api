@@ -18,13 +18,24 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-// Forward forwards request to OpenAI API
+// Forward 转发 Responses 请求，支持推理的 OpenAI 模型缺省使用 high，并受分组策略约束。
 func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, body []byte) (result *OpenAIForwardResult, resultErr error) {
 	if err := validateOpenAIPassthroughModels(account, body); err != nil {
 		MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalModelConfiguration)
 		c.JSON(http.StatusBadRequest, gin.H{"error": gin.H{"type": "invalid_request_error", "message": err.Error()}})
 		return nil, err
 	}
+	requestedDefaultModel := gjson.GetBytes(body, "model").String()
+	_, upstreamDefaultModel := resolveOpenAIForwardMappedModels(account, requestedDefaultModel, isOpenAIResponsesCompactPath(c))
+	defaultBody, _, defaultErr := applyOpenAIReasoningEffortDefault(ctx, account, body, upstreamDefaultModel, "reasoning.effort")
+	if defaultErr != nil {
+		if IsReasoningEffortPolicyDenied(defaultErr) {
+			MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
+			c.JSON(http.StatusForbidden, gin.H{"error": gin.H{"type": "permission_error", "message": defaultErr.Error()}})
+		}
+		return nil, defaultErr
+	}
+	body = defaultBody
 	// 规范化后超限时，回到原始请求按 HTTP 规则重新构造一次；此信号只在拨号和写入前产生。
 	routingBody := body
 	defer func() {
@@ -1549,7 +1560,7 @@ func (s *OpenAIGatewayService) buildUpstreamRequest(ctx context.Context, c *gin.
 	applyOpenCodeUpstreamUserAgent(account, targetURL, req.Header)
 
 	// 账号级请求头覆写（仅 openai api_key 账号启用时生效；OAuth 路径 no-op）
-	account.ApplyHeaderOverrides(req.Header)
+	account.ApplyHeaderOverrides(req.Context(), req.Header)
 	applyOpenCodeSessionHeader(c, account, targetURL, req.Header, body, openCodeSessionHintBody(promptCacheKey))
 	// x-codex-beta-features：按真实 Codex 的会话级行为补注（在账号级覆写之后，
 	// 保证不被覆盖丢失）。

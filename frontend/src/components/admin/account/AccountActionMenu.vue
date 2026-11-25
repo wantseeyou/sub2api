@@ -37,7 +37,7 @@
                 <Icon name="link" size="sm" />
                 {{ t('admin.accounts.reAuthorize') }}
               </button>
-              <button v-permission="'accounts.refresh'" @click="$emit('refresh-token', account); $emit('close')" class="flex w-full items-center gap-2 px-4 py-2 text-sm text-purple-600 hover:bg-gray-100 dark:hover:bg-dark-700">
+              <button v-permission="'accounts.refresh'" @click="$emit('refresh-token', account); $emit('close')" :title="t('admin.accounts.refreshTokenHint')" class="flex w-full items-center gap-2 px-4 py-2 text-sm text-purple-600 hover:bg-gray-100 dark:hover:bg-dark-700">
                 <Icon name="refresh" size="sm" />
                 {{ t('admin.accounts.refreshToken') }}
               </button>

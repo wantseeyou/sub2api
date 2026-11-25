@@ -23,6 +23,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 func f64p(v float64) *float64 { return &v }
@@ -1777,7 +1778,11 @@ func TestOpenAIGatewayService_APIKeyPassthrough_Transient5xxTriggersFailover(t *
 			require.Equal(t, "rid-api-key-5xx", failoverErr.ResponseHeaders.Get("x-request-id"))
 			require.False(t, c.Writer.Written(), "failover must happen before downstream output is committed")
 			require.True(t, body.closed, "the failed upstream response body must be closed")
-			require.Equal(t, requestBody, upstream.lastBody, "the request body remains available for the outer account retry")
+			require.Equal(t, "high", gjson.GetBytes(upstream.lastBody, "reasoning.effort").String())
+			forwardedWithoutDefault, err := sjson.DeleteBytes(upstream.lastBody, "reasoning")
+			require.NoError(t, err)
+			require.Equal(t, requestBody, forwardedWithoutDefault, "the request body remains available for the outer account retry")
+			require.False(t, gjson.GetBytes(requestBody, "reasoning").Exists(), "default injection must not mutate the outer retry body")
 
 			value, ok := c.Get(OpsUpstreamErrorsKey)
 			require.True(t, ok)
@@ -2581,7 +2586,10 @@ func TestOpenAIGatewayService_APIKeyPassthrough_PreservesBodyAndUsesResponsesEnd
 	require.NotNil(t, result.ServiceTier)
 	require.Equal(t, "flex", *result.ServiceTier)
 	require.NotNil(t, upstream.lastReq)
-	require.Equal(t, bytes.Replace(originalBody, []byte("gpt-5.2"), []byte("gpt-5.2-account"), 1), upstream.lastBody)
+	require.Equal(t, "high", gjson.GetBytes(upstream.lastBody, "reasoning.effort").String())
+	forwardedWithoutDefault, err := sjson.DeleteBytes(upstream.lastBody, "reasoning")
+	require.NoError(t, err)
+	require.Equal(t, bytes.Replace(originalBody, []byte("gpt-5.2"), []byte("gpt-5.2-account"), 1), forwardedWithoutDefault)
 	require.Equal(t, "gpt-5.2", result.Model)
 	require.Equal(t, "gpt-5.2-account", result.UpstreamModel)
 	require.False(t, gjson.GetBytes(upstream.lastBody, "instructions").Exists())

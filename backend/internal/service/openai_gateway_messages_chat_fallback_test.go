@@ -86,10 +86,10 @@ func TestForwardAsAnthropic_ForceChatCompletionsPreservesFinalModelReasoningEffo
 			wantEffort: "high",
 		},
 		{
-			name:       "omitted defaults medium",
+			name:       "omitted defaults high",
 			model:      "gpt-5.6-luna",
 			mapped:     "gpt-5.6-luna",
-			wantEffort: "medium",
+			wantEffort: "high",
 		},
 		{
 			name:       "disabled thinking overrides max",

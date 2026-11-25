@@ -75,9 +75,12 @@ export function buildAccountRolePatch(
     concurrency: 'accounts.schedule', priority: 'accounts.schedule', load_factor: 'accounts.schedule',
     rate_multiplier: 'accounts.schedule', expires_at: 'accounts.schedule', auto_pause_on_expired: 'accounts.schedule',
     upstream_billing_probe_enabled: 'accounts.test', upstream_billing_rate_sync_enabled: 'accounts.test',
+    upstream_billing_group_sync_enabled: 'accounts.update',
     status: current.status === 'active' || current.status === 'inactive' ? 'accounts.status' : 'accounts.configuration'
   }
   for (const [key, permission] of Object.entries(fields)) {
+    // 自动同步名称同时开启探测，与后端的双权限约束保持一致。
+    if (key === 'upstream_billing_group_sync_enabled' && !can('accounts.test')) continue
     if (can(permission) && Object.prototype.hasOwnProperty.call(current, key) && !sameValue(initial[key], current[key])) result[key] = current[key]
   }
   for (const field of ['credentials', 'extra']) {
@@ -85,7 +88,7 @@ export function buildAccountRolePatch(
     const after = (current[field] || {}) as Record<string, unknown>
     const patch: Record<string, unknown> = {}
     for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
-      if (field === 'extra' && (key === 'upstream_billing_probe_enabled' || key === 'upstream_billing_rate_sync_enabled')) continue
+      if (field === 'extra' && (key === 'upstream_billing_probe_enabled' || key === 'upstream_billing_rate_sync_enabled' || key === 'upstream_billing_group_sync_enabled')) continue
       const permission = field === 'credentials' ? accountCredentialPermission(key) : accountExtraPermission(key)
       if (!can(permission) || sameValue(before[key], after[key])) continue
       const removing = !Object.prototype.hasOwnProperty.call(after, key) || after[key] === null

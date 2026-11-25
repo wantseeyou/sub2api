@@ -136,6 +136,13 @@ func authorizeRoleRequest(c *gin.Context, users *service.UserService) bool {
 					return false
 				}
 				continue
+			case "upstream_billing_group_sync_enabled":
+				// 自动同步会修改名称并开启探测，两个权限都必须具备。
+				if !role.Allows("accounts.update") {
+					AbortWithError(c, 403, "ROLE_PERMISSION_DENIED", "未获修改账号名称权限")
+					return false
+				}
+				permission = "accounts.test"
 			case "upstream_billing_probe_enabled", "upstream_billing_rate_sync_enabled":
 				permission = "accounts.test"
 			default:

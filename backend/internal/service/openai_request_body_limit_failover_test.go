@@ -14,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 func TestOpenAIRequestBodyLimitFailover_HTTP413SwitchesAccountsBeforeWrite(t *testing.T) {
@@ -81,8 +82,11 @@ func TestOpenAIRequestBodyLimitFailover_HTTP413SwitchesAccountsBeforeWrite(t *te
 			require.False(t, c.Writer.Written(), "account failover must happen before downstream output is committed")
 			require.Empty(t, rec.Body.String())
 			require.True(t, body.closed)
+			require.Equal(t, "high", gjson.GetBytes(upstream.lastBody, "reasoning.effort").String())
 			if passthrough {
-				require.Equal(t, requestBody, upstream.lastBody)
+				forwardedWithoutDefault, err := sjson.DeleteBytes(upstream.lastBody, "reasoning")
+				require.NoError(t, err)
+				require.Equal(t, requestBody, forwardedWithoutDefault)
 			} else {
 				require.Equal(t, "gpt-5.2", gjson.GetBytes(upstream.lastBody, "model").String())
 				require.Equal(t, "hello", gjson.GetBytes(upstream.lastBody, "input").String())

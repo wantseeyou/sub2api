@@ -133,7 +133,7 @@ func TestForward_AstraOAuth_ModeMatrix_Preserved(t *testing.T) {
 		{name: "standard+max", mode: "standard", effort: "max", wantMod: "standard", wantEff: "max"},
 		{name: "missing mode + max", mode: "", effort: "max", wantMod: "", wantEff: "max"},
 		{name: "pro+high", mode: "pro", effort: "high", wantMod: "pro", wantEff: "high"},
-		{name: "pro no effort", mode: "pro", effort: "", wantMod: "pro", wantEff: ""},
+		{name: "pro no effort", mode: "pro", effort: "", wantMod: "pro", wantEff: "high"},
 	}
 	for _, passthrough := range []bool{false, true} {
 		branch := "native-codex"
@@ -170,11 +170,7 @@ func TestForward_AstraOAuth_ModeMatrix_Preserved(t *testing.T) {
 						require.Equal(t, tt.wantMod, mode.String())
 					}
 					eff := gjson.GetBytes(forwarded, "reasoning.effort")
-					if tt.wantEff == "" {
-						require.False(t, eff.Exists(), "no effort injected when omitted for %q", tt.name)
-					} else {
-						require.Equal(t, tt.wantEff, eff.String(), "Astra effort preserved for %q", tt.name)
-					}
+					require.Equal(t, tt.wantEff, eff.String(), "Astra preserves explicit effort and defaults omitted effort to high for %q", tt.name)
 				})
 			}
 		}

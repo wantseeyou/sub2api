@@ -273,10 +273,10 @@ describe('BulkEditAccountModal', () => {
     })
   })
 
-  it('OpenAI 账号批量编辑可开启自动透传', async () => {
+  it.each(['oauth', 'apikey'])('OpenAI %s 仅开启自动透传时保留原有模型筛选设置', async (type) => {
     const wrapper = mountModal({
       selectedPlatforms: ['openai'],
-      selectedTypes: ['oauth']
+      selectedTypes: [type]
     })
 
     await wrapper.get('#bulk-edit-openai-passthrough-enabled').setValue(true)
@@ -892,10 +892,10 @@ describe('BulkEditAccountModal', () => {
     })
   })
 
-  it('OpenAI 账号批量编辑可关闭自动透传', async () => {
+  it.each(['oauth', 'apikey'])('OpenAI %s 仅关闭自动透传时保留原有模型筛选设置', async (type) => {
     const wrapper = mountModal({
       selectedPlatforms: ['openai'],
-      selectedTypes: ['apikey']
+      selectedTypes: [type]
     })
 
     await wrapper.get('#bulk-edit-openai-passthrough-enabled').setValue(true)

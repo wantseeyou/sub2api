@@ -447,9 +447,13 @@ func WithOpenAIReasoningEffortPolicy(ctx context.Context, maxEffort string, mapp
 	return context.WithValue(ctx, openAIReasoningEffortPolicyContextKey{}, policy)
 }
 
-// WithOpenAIReasoningEffortPolicyForMessages preserves ordinary bridge defaults,
-// but retains ceilings and none mappings for explicitly disabled thinking.
+// WithOpenAIReasoningEffortPolicyForMessages 同时保存 OpenAI high 默认值所需的完整策略，
+// 并为其他模型的既有桥接缺省值及显式关闭推理保留原过滤语义。
 func WithOpenAIReasoningEffortPolicyForMessages(ctx context.Context, body []byte, maxEffort string, mappings []ReasoningEffortMapping, overLimit string) context.Context {
+	// 完整策略专供 OpenAI high 默认值；其他模型继续保留原桥接缺省值的过滤语义。
+	ctx = WithOpenAIReasoningEffortPolicy(ctx, maxEffort, mappings, overLimit)
+	policy := ctx.Value(openAIReasoningEffortPolicyContextKey{}).(openAIReasoningEffortPolicy)
+	ctx = context.WithValue(ctx, openAIReasoningEffortDefaultPolicyContextKey{}, policy)
 	effort := gjson.GetBytes(body, "output_config.effort")
 	if effort.Type != gjson.String || strings.TrimSpace(effort.String()) == "" {
 		if gjson.GetBytes(body, "thinking.type").String() != "disabled" {

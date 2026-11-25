@@ -13,6 +13,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/requestmodel"
 	openaiwsv2 "github.com/Wei-Shaw/sub2api/internal/service/openai_ws_v2"
 	coderws "github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
@@ -689,6 +690,10 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		c.Set(codexWSFrameFollowupContextKey, false)
 		c.Set(openAIWSExecutionStageKey, openAIWSNotSent)
 	}
+	defaultEffortCtx := ctx
+	if hooks != nil && (hooks.MaxReasoningEffort != "" || len(hooks.ReasoningEffortMappings) > 0) {
+		defaultEffortCtx = WithOpenAIReasoningEffortPolicy(ctx, hooks.MaxReasoningEffort, hooks.ReasoningEffortMappings, hooks.MaxReasoningEffortOverLimit)
+	}
 	fingerprintIDs := resolveCodexFingerprintIDsForRequest(c, account, firstClientMessage)
 	stageCodexFingerprintIDs(c, fingerprintIDs)
 	ingressIdentity := currentCodexClientIdentity(c)
@@ -792,6 +797,16 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		return NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket identity metadata", fingerprintErr)
 	} else if changed {
 		firstClientMessage = fingerprintPayload
+	}
+	if gjson.GetBytes(firstClientMessage, "type").String() == "response.create" {
+		defaultPayload, _, defaultErr := applyOpenAIReasoningEffortDefault(defaultEffortCtx, account, firstClientMessage, capturedSessionModel, "reasoning.effort", initialRequestModel)
+		if defaultErr != nil {
+			if IsReasoningEffortPolicyDenied(defaultErr) {
+				MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
+			}
+			return NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, defaultErr.Error(), defaultErr)
+		}
+		firstClientMessage = defaultPayload
 	}
 	usageMeta := newOpenAIWSPassthroughUsageMeta(initialRequestModel, firstClientMessage)
 	updatedFirst, blocked, policyErr := s.applyOpenAIFastPolicyToWSResponseCreate(ctx, account, capturedSessionModel, firstClientMessage)
@@ -1005,6 +1020,12 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			if msgType != coderws.MessageText && msgType != coderws.MessageBinary {
 				return payload, nil, nil
 			}
+			// passthrough 原样转发 session.update 等所有客户端事件；任何帧内的重复
+			// 字段都会让网关（gjson 取首个、sjson 只改首个）与上游读到不同的值
+			// （GHSA-p3r4-jcm3-2hph），在读取任何字段之前拒绝。
+			if field, conflict := requestmodel.ConflictingField("application/json", payload); conflict {
+				return payload, nil, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, fmt.Sprintf("websocket request payload declares field %.64q more than once", field), nil)
+			}
 			eventType := strings.TrimSpace(gjson.GetBytes(payload, "type").String())
 			isResponseCreate := eventType == "response.create"
 			responseCreateAt := time.Time{}
@@ -1154,6 +1175,16 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			}
 			if isResponseCreate && model != "" && model != strings.TrimSpace(gjson.GetBytes(payload, "model").String()) {
 				payload = s.ReplaceModelInBody(payload, model)
+			}
+			if isResponseCreate {
+				defaultPayload, _, defaultErr := applyOpenAIReasoningEffortDefault(defaultEffortCtx, account, payload, model, "reasoning.effort", requestModelForThisFrame)
+				if defaultErr != nil {
+					if IsReasoningEffortPolicyDenied(defaultErr) {
+						MarkOpsClientBusinessLimited(c, OpsClientBusinessLimitedReasonLocalPolicyDenied)
+					}
+					return payload, nil, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, defaultErr.Error(), defaultErr)
+				}
+				payload = defaultPayload
 			}
 			out, blocked, policyErr := s.applyOpenAIFastPolicyToWSResponseCreate(ctx, account, model, payload)
 			// 多轮 passthrough usage：仅在成功（non-block / non-err）
